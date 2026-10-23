@@ -38,7 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
 import { MediaLightbox } from "./media-lightbox";
@@ -328,6 +327,12 @@ export function MessageThread({
   });
 
   const conversationId = conversation?.id;
+  const [previousConversationId, setPreviousConversationId] = useState(conversationId);
+  if (conversationId !== previousConversationId) {
+    setPreviousConversationId(conversationId);
+    setReplyTo(null);
+    if (!conversationId) setReactions([]);
+  }
   const hasUnread = (conversation?.unread_count ?? 0) > 0;
   const hasOlderMessages =
     !!olderPages && olderPages.conversationId === conversationId && olderPages.hasOlder;
@@ -433,10 +438,7 @@ export function MessageThread({
   // refetches the rows without also tearing down and rebuilding the
   // realtime channel.
   useEffect(() => {
-    if (!conversationId) {
-      setReactions([]);
-      return;
-    }
+    if (!conversationId) return;
     const supabase = createClient();
     let cancelled = false;
 
@@ -529,12 +531,6 @@ export function MessageThread({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
-
-  // Clear any in-progress reply draft when the active conversation changes —
-  // a quote pulled from conversation A shouldn't bleed into conversation B.
-  useEffect(() => {
-    setReplyTo(null);
   }, [conversationId]);
 
   // Reset the server-side unread_count to 0 whenever an unread count
@@ -882,7 +878,7 @@ export function MessageThread({
         preview: buildReplyPreview(msg, tQuote),
       });
     },
-    [authorLabelFor],
+    [authorLabelFor, tQuote],
   );
 
   // Single reaction-set primitive. emoji === "" removes; otherwise adds/swaps.
@@ -933,7 +929,7 @@ export function MessageThread({
         setReactions(snapshot);
       }
     },
-    [conversation, user?.id, t],
+    [conversation, user, t],
   );
 
   const handleAssignChange = useCallback(

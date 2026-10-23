@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -137,7 +137,7 @@ export function TemplateManager() {
   const supabase = createClient();
   const { user, loading: authLoading } = useAuth();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(authLoading || Boolean(user));
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -176,43 +176,53 @@ export function TemplateManager() {
   );
 
   // Resize body_samples so it always has exactly bodyVarCount entries.
-  // (We mutate via setForm in an effect so React owns the state.)
-  useEffect(() => {
+  const [previousBodyVarCount, setPreviousBodyVarCount] = useState(bodyVarCount);
+  if (bodyVarCount !== previousBodyVarCount) {
+    setPreviousBodyVarCount(bodyVarCount);
     setForm((prev) => {
       if (prev.body_samples.length === bodyVarCount) return prev;
       const next = prev.body_samples.slice(0, bodyVarCount);
       while (next.length < bodyVarCount) next.push('');
       return { ...prev, body_samples: next };
     });
-  }, [bodyVarCount]);
+  }
+
+  const userId = user?.id;
+  const [previousAuth, setPreviousAuth] = useState({ authLoading, userId });
+  if (authLoading !== previousAuth.authLoading || userId !== previousAuth.userId) {
+    setPreviousAuth({ authLoading, userId });
+    if (!authLoading) setLoading(Boolean(userId));
+  }
+
+  const fetchTemplates = useCallback(
+    (id: string) => {
+      const request = async () => {
+        return supabase
+          .from('message_templates')
+          .select('*')
+          .eq('user_id', id)
+          .order('created_at', { ascending: false });
+      };
+      return request()
+        .then(({ data, error }) => {
+          if (error) throw error;
+          setTemplates(data || []);
+        })
+        .catch((err) => {
+          console.error('Failed to fetch templates:', err);
+          toast.error(t('toastLoadFailed'));
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [supabase, t]
+  );
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    fetchTemplates(user.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id]);
-
-  async function fetchTemplates(userId: string) {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('message_templates')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setTemplates(data || []);
-    } catch (err) {
-      console.error('Failed to fetch templates:', err);
-      toast.error(t('toastLoadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }
+    if (authLoading || !userId) return;
+    void fetchTemplates(userId);
+  }, [authLoading, userId, fetchTemplates]);
 
   function buildSubmitPayload() {
     const sample_values: TemplateSampleValues = {};
@@ -289,7 +299,10 @@ export function TemplateManager() {
       }
       // Refresh first, then close — re-opening the dialog
       // immediately should not show a stale list.
-      if (user) await fetchTemplates(user.id);
+      if (user) {
+        setLoading(true);
+        await fetchTemplates(user.id);
+      }
       toast.success(
         data.dry_run
           ? isEdit
@@ -343,6 +356,7 @@ export function TemplateManager() {
           { duration: 10000 },
         );
       }
+      setLoading(true);
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Template sync error:', err);

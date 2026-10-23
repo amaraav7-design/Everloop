@@ -18,6 +18,9 @@
 // Source: https://github.com/tremorlabs/tremor/blob/main/src/components/BarChart/BarChart.tsx
 // ============================================================
 
+// Additional local adaptation: ScrollButton reconciles disabled state during
+// render and includes disabled in the press interval effect's dependencies.
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 "use client"
@@ -170,8 +173,10 @@ const ScrollButton = ({ icon, onClick, disabled }: ScrollButtonProps) => {
   const [isPressed, setIsPressed] = React.useState(false)
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
 
+  if (disabled && isPressed) setIsPressed(false)
+
   React.useEffect(() => {
-    if (isPressed) {
+    if (isPressed && !disabled) {
       intervalRef.current = setInterval(() => {
         onClick?.()
       }, 300)
@@ -179,14 +184,7 @@ const ScrollButton = ({ icon, onClick, disabled }: ScrollButtonProps) => {
       clearInterval(intervalRef.current as NodeJS.Timeout)
     }
     return () => clearInterval(intervalRef.current as NodeJS.Timeout)
-  }, [isPressed, onClick])
-
-  React.useEffect(() => {
-    if (disabled) {
-      clearInterval(intervalRef.current as NodeJS.Timeout)
-      setIsPressed(false)
-    }
-  }, [disabled])
+  }, [isPressed, onClick, disabled])
 
   return (
     <button

@@ -386,13 +386,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setAccount(null);
-    window.location.href = "/login";
+    window.location.assign(new URL("/login", window.location.origin).href);
   }, []);
 
+  const userId = user?.id;
   const refreshProfile = useCallback(async () => {
-    if (!user?.id) return;
-    await fetchProfile(user.id);
-  }, [user?.id, fetchProfile]);
+    if (!userId) return;
+    await fetchProfile(userId);
+  }, [userId, fetchProfile]);
 
   // Derive the role booleans once per profile change rather than on
   // every consumer render. Cheap regardless, but the memo also gives
@@ -463,7 +464,7 @@ export function useAuth(): AuthContextValue {
       loading: false,
       profileLoading: false,
       signOut: async () => {
-        window.location.href = "/login";
+        window.location.assign(new URL("/login", window.location.origin).href);
       },
       refreshProfile: async () => {},
       account: null,

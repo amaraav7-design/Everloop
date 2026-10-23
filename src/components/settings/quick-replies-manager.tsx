@@ -50,15 +50,15 @@ export function QuickRepliesManager() {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/quick-replies", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setItems((data.quick_replies as QuickReply[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
+  const load = useCallback(() => {
+    return fetch("/api/quick-replies", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) setItems((data.quick_replies as QuickReply[]) ?? []);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -104,6 +104,7 @@ export function QuickRepliesManager() {
       }
       toast.success(draft.id ? t("updated") : t("created"));
       setDraft(null);
+      setLoading(true);
       await load();
     } catch {
       toast.error(t("saveError"));
@@ -120,6 +121,7 @@ export function QuickRepliesManager() {
         toast.error(t("deleteError"));
         return;
       }
+      setLoading(true);
       await load();
     },
     [load, t],

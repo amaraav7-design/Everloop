@@ -6,7 +6,7 @@ import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
+import type { Contact, Tag, ContactNote, CustomField, Deal, MessageTemplate } from '@/types';
 import {
   TemplatePicker,
   type TemplateSendValues,
@@ -24,8 +24,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Phone,
   Mail,
@@ -36,7 +34,6 @@ import {
   Plus,
   Trash2,
   Save,
-  X,
   DollarSign,
   LayoutTemplate,
 } from 'lucide-react';
@@ -62,7 +59,7 @@ export function ContactDetailView({
   const { accountId, defaultCurrency } = useAuth();
 
   const [contact, setContact] = useState<Contact | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(open && Boolean(contactId));
   const [copiedPhone, setCopiedPhone] = useState(false);
 
   // Send template — lets the business initiate (or re-open) a conversation
@@ -87,99 +84,110 @@ export function ContactDetailView({
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
-  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [loadingNotes, setLoadingNotes] = useState(open && Boolean(contactId));
 
   // Custom fields tab
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [savingCustom, setSavingCustom] = useState(false);
-  const [loadingCustom, setLoadingCustom] = useState(false);
+  const [loadingCustom, setLoadingCustom] = useState(open && Boolean(contactId));
 
   // Deals tab
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [loadingDeals, setLoadingDeals] = useState(false);
+  const [loadingDeals, setLoadingDeals] = useState(open && Boolean(contactId));
 
-  const fetchContact = useCallback(async () => {
+  const [previousSource, setPreviousSource] = useState({ open, contactId });
+  if (open !== previousSource.open || contactId !== previousSource.contactId) {
+    setPreviousSource({ open, contactId });
+    if (open && contactId) {
+      setLoading(true);
+      setLoadingNotes(true);
+      setLoadingCustom(true);
+      setLoadingDeals(true);
+    }
+  }
+
+  const fetchContact = useCallback(() => {
     if (!contactId) return;
-    setLoading(true);
 
-    const { data } = await supabase
+    return supabase
       .from('contacts')
       .select('*')
       .eq('id', contactId)
-      .single();
-
-    if (data) {
-      setContact(data);
-      setEditName(data.name ?? '');
-      setEditPhone(data.phone);
-      setEditEmail(data.email ?? '');
-      setEditCompany(data.company ?? '');
-    }
-    setLoading(false);
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setContact(data);
+          setEditName(data.name ?? '');
+          setEditPhone(data.phone);
+          setEditEmail(data.email ?? '');
+          setEditCompany(data.company ?? '');
+        }
+        setLoading(false);
+      });
   }, [contactId, supabase]);
 
-  const fetchTags = useCallback(async () => {
+  const fetchTags = useCallback(() => {
     if (!contactId) return;
 
-    const [tagsRes, contactTagsRes] = await Promise.all([
+    return Promise.all([
       supabase.from('tags').select('*').order('name'),
       supabase.from('contact_tags').select('tag_id').eq('contact_id', contactId),
-    ]);
-
-    if (tagsRes.data) setAllTags(tagsRes.data);
-    if (contactTagsRes.data) {
-      setContactTagIds(contactTagsRes.data.map((ct) => ct.tag_id));
-    }
+    ]).then(([tagsRes, contactTagsRes]) => {
+      if (tagsRes.data) setAllTags(tagsRes.data);
+      if (contactTagsRes.data) {
+        setContactTagIds(contactTagsRes.data.map((ct) => ct.tag_id));
+      }
+    });
   }, [contactId, supabase]);
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(() => {
     if (!contactId) return;
-    setLoadingNotes(true);
 
-    const { data } = await supabase
+    return supabase
       .from('contact_notes')
       .select('*')
       .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-
-    if (data) setNotes(data);
-    setLoadingNotes(false);
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setNotes(data);
+        setLoadingNotes(false);
+      });
   }, [contactId, supabase]);
 
-  const fetchCustomFields = useCallback(async () => {
+  const fetchCustomFields = useCallback(() => {
     if (!contactId) return;
-    setLoadingCustom(true);
 
-    const [fieldsRes, valuesRes] = await Promise.all([
+    return Promise.all([
       supabase.from('custom_fields').select('*').order('field_name'),
       supabase
         .from('contact_custom_values')
         .select('*')
         .eq('contact_id', contactId),
-    ]);
-
-    if (fieldsRes.data) setCustomFields(fieldsRes.data);
-    if (valuesRes.data) {
-      const map: Record<string, string> = {};
-      valuesRes.data.forEach((v) => {
-        map[v.custom_field_id] = v.value ?? '';
-      });
-      setCustomValues(map);
-    }
-    setLoadingCustom(false);
+    ]).then(([fieldsRes, valuesRes]) => {
+      if (fieldsRes.data) setCustomFields(fieldsRes.data);
+      if (valuesRes.data) {
+        const map: Record<string, string> = {};
+        valuesRes.data.forEach((v) => {
+          map[v.custom_field_id] = v.value ?? '';
+        });
+        setCustomValues(map);
+      }
+      setLoadingCustom(false);
+    });
   }, [contactId, supabase]);
 
-  const fetchDeals = useCallback(async () => {
+  const fetchDeals = useCallback(() => {
     if (!contactId) return;
-    setLoadingDeals(true);
-    const { data } = await supabase
+    return supabase
       .from('deals')
       .select('*, stage:pipeline_stages(*)')
       .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    setDeals((data ?? []) as Deal[]);
-    setLoadingDeals(false);
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setDeals((data ?? []) as Deal[]);
+        setLoadingDeals(false);
+      });
   }, [contactId, supabase]);
 
   useEffect(() => {
@@ -231,6 +239,7 @@ export function ContactDetailView({
       toast.error(t('toastUpdateFailed'));
     } else {
       toast.success(t('toastUpdated'));
+      setLoading(true);
       fetchContact();
       onUpdated();
     }
@@ -283,6 +292,7 @@ export function ContactDetailView({
       toast.error(t('toastNoteAddFailed'));
     } else {
       setNewNote('');
+      setLoadingNotes(true);
       fetchNotes();
       toast.success(t('toastNoteAdded'));
     }

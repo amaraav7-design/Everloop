@@ -165,32 +165,36 @@ export default function BroadcastDetailPage() {
     'pending' | 'failed' | null
   >(null);
 
-  const fetchData = useCallback(async () => {
-    try {
+  const fetchData = useCallback(() => {
+    const request = async () => {
       const supabase = createClient();
-
-      const { data: bc, error: bcError } = await supabase
+      const result = await supabase
         .from('broadcasts')
         .select('*')
         .eq('id', broadcastId)
         .single();
+      return { ...result, supabase };
+    };
+    return request()
+      .then(async ({ data: bc, error: bcError, supabase }) => {
+        if (bcError) throw bcError;
+        setBroadcast(bc);
 
-      if (bcError) throw bcError;
-      setBroadcast(bc);
+        const { data: recs, error: recsError } = await supabase
+          .from('broadcast_recipients')
+          .select('*, contact:contacts(*)')
+          .eq('broadcast_id', broadcastId)
+          .order('created_at', { ascending: false });
 
-      const { data: recs, error: recsError } = await supabase
-        .from('broadcast_recipients')
-        .select('*, contact:contacts(*)')
-        .eq('broadcast_id', broadcastId)
-        .order('created_at', { ascending: false });
-
-      if (recsError) throw recsError;
-      setRecipients(recs ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('notFound'));
-    } finally {
-      setLoading(false);
-    }
+        if (recsError) throw recsError;
+        setRecipients(recs ?? []);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : t('notFound'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [broadcastId, t]);
 
   useEffect(() => {

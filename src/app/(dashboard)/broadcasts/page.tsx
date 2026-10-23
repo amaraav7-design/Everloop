@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
@@ -70,26 +70,30 @@ export default function BroadcastsPage() {
   // Used to kick off polling only while something is actively sending.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  async function fetchBroadcasts() {
-    try {
+  const fetchBroadcasts = useCallback(() => {
+    const request = async () => {
       const supabase = createClient();
-      const { data, error: fetchError } = await supabase
+      return supabase
         .from('broadcasts')
         .select('*')
         .order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-      setBroadcasts(data ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('errorLoad'));
-    } finally {
-      setLoading(false);
-    }
-  }
+    };
+    return request()
+      .then(({ data, error: fetchError }) => {
+        if (fetchError) throw fetchError;
+        setBroadcasts(data ?? []);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : t('errorLoad'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [t]);
 
   useEffect(() => {
-    fetchBroadcasts();
-  }, []);
+    void fetchBroadcasts();
+  }, [fetchBroadcasts]);
 
   const anySending = useMemo(
     () => broadcasts.some((b) => b.status === 'sending'),
@@ -130,7 +134,7 @@ export default function BroadcastsPage() {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [anySending]);
+  }, [anySending, fetchBroadcasts]);
 
   if (loading) {
     return (

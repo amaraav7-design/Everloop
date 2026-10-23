@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useCallback, useEffect, useRef } from "react";
+import { Suspense, useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,6 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { parseInboxFilter } from "@/lib/inbox/inbox-filters";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
-import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -27,6 +26,17 @@ import {
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
 const CONTACT_PANEL_STORAGE_KEY = "wacrm:inbox:contact-panel-open";
+const subscribeContactPanel = () => () => {};
+const contactPanelServerSnapshot = () => true;
+function contactPanelSnapshot() {
+  try {
+    const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
+    return stored === null || stored === "true";
+  } catch {
+    return true;
+  }
+}
+
 
 // `useSearchParams` (the `?c=<id>` deep link below) requires a Suspense
 // boundary or the production build bails to CSR and errors out. Thin
@@ -67,35 +77,24 @@ function InboxPageInner() {
    */
   const [resyncToken, setResyncToken] = useState(0);
 
-  /**
-   * Whether the desktop contact sidebar (tags / deals / notes) is shown.
-   * Defaults to `true` (the historical behaviour) and is restored from
-   * localStorage after mount. We deliberately do NOT read localStorage in
-   * the initializer: the server renders with `true`, so reading a stored
-   * `false` synchronously would produce a hydration mismatch. The effect
-   * below reconciles to the stored value right after mount instead.
-   */
-  const [contactPanelOpen, setContactPanelOpen] = useState(true);
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
-      if (stored !== null) setContactPanelOpen(stored === "true");
-    } catch {
-      // localStorage can throw in private-browsing / sandboxed contexts.
-    }
-  }, []);
-
+  // The server snapshot keeps hydration consistent; storage is read once
+  // React subscribes on the client. Local controls work even if storage fails.
+  const storedContactPanelOpen = useSyncExternalStore(
+    subscribeContactPanel,
+    contactPanelSnapshot,
+    contactPanelServerSnapshot,
+  );
+  const [contactPanelOverride, setContactPanelOverride] = useState<boolean | null>(null);
+  const contactPanelOpen = contactPanelOverride ?? storedContactPanelOpen;
   const handleToggleContactPanel = useCallback(() => {
-    setContactPanelOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(CONTACT_PANEL_STORAGE_KEY, String(next));
-      } catch {
-        // Persistence is best-effort; ignore storage failures.
-      }
-      return next;
-    });
-  }, []);
+    const next = !contactPanelOpen;
+    setContactPanelOverride(next);
+    try {
+      localStorage.setItem(CONTACT_PANEL_STORAGE_KEY, String(next));
+    } catch {
+      // Persistence is best-effort; ignore storage failures.
+    }
+  }, [contactPanelOpen]);
 
   // Fire the deep-link auto-select exactly once per URL — subsequent
   // list refreshes (realtime, manual refetch) must not snap the user

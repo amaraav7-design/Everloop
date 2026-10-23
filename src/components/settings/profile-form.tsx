@@ -38,8 +38,9 @@ export function ProfileForm() {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState(profile?.full_name ?? '');
+  const [email, setEmail] = useState(profile?.email ?? '');
+  const [previousProfile, setPreviousProfile] = useState(profile);
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -47,11 +48,13 @@ export function ProfileForm() {
   const [emailChangePending, setEmailChangePending] = useState(false);
 
   // Seed form state once the profile loads.
-  useEffect(() => {
-    if (!profile) return;
-    setFullName(profile.full_name ?? '');
-    setEmail(profile.email ?? '');
-  }, [profile]);
+  if (profile !== previousProfile) {
+    setPreviousProfile(profile);
+    if (profile) {
+      setFullName(profile.full_name ?? '');
+      setEmail(profile.email ?? '');
+    }
+  }
 
   // Cleanup object URLs to avoid leaks.
   useEffect(() => {

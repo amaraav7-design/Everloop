@@ -78,27 +78,38 @@ export function ApiKeysSettings() {
   const [createOpen, setCreateOpen] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const fetchKeys = useCallback(async () => {
     try {
       const res = await fetch('/api/account/api-keys', { cache: 'no-store' });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         toast.error(payload.error || t('loadFailed'));
-        return;
+        return null;
       }
       const data = (await res.json()) as { keys: ApiKey[] };
-      setKeys(data.keys);
+      return data.keys;
     } catch (err) {
       console.error('[ApiKeysSettings] load error:', err);
       toast.error(t('networkError'));
-    } finally {
-      setLoading(false);
+      return null;
     }
-  }, []);
+  }, [t]);
+
+  const load = useCallback(async () => {
+    const keys = await fetchKeys();
+    if (keys) setKeys(keys);
+    setLoading(false);
+  }, [fetchKeys]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void fetchKeys().then((keys) => {
+      if (!active) return;
+      if (keys) setKeys(keys);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchKeys]);
 
   async function handleRevoke(key: ApiKey) {
     setRevoking(key.id);

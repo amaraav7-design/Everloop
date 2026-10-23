@@ -24,7 +24,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -52,10 +51,10 @@ export function ContactForm({
   const { accountId } = useAuth();
   const isEdit = !!contact;
 
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
+  const [name, setName] = useState(contact?.name ?? '');
+  const [phone, setPhone] = useState(contact?.phone ?? '');
+  const [email, setEmail] = useState(contact?.email ?? '');
+  const [company, setCompany] = useState(contact?.company ?? '');
   const [saving, setSaving] = useState(false);
 
   // Duplicate-phone detection for NEW contacts. `exact` (same digits)
@@ -68,10 +67,12 @@ export function ContactForm({
   const [checkingDup, setCheckingDup] = useState(false);
 
   const [tags, setTags] = useState<Tag[]>([]);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [loadingTags, setLoadingTags] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => contactTags.map((ct) => ct.tag_id));
+  const [loadingTags, setLoadingTags] = useState(open);
 
-  useEffect(() => {
+  const [previousSource, setPreviousSource] = useState({ open, contact });
+  if (open !== previousSource.open || contact !== previousSource.contact) {
+    setPreviousSource({ open, contact });
     if (open) {
       setName(contact?.name ?? '');
       setPhone(contact?.phone ?? '');
@@ -79,9 +80,20 @@ export function ContactForm({
       setCompany(contact?.company ?? '');
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       setDupMatch(null);
-      fetchTags();
+      setLoadingTags(true);
     }
-  }, [open, contact]);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void supabase.from('tags').select('*').order('name').then(({ data }) => {
+      if (!active) return;
+      if (data) setTags(data);
+      setLoadingTags(false);
+    });
+    return () => { active = false; };
+  }, [open, contact, supabase]);
 
   // Look up an existing contact with this number (new contacts only).
   // Runs on blur so we don't query on every keystroke.
@@ -103,16 +115,6 @@ export function ContactForm({
     } finally {
       setCheckingDup(false);
     }
-  }
-
-  async function fetchTags() {
-    setLoadingTags(true);
-    const { data } = await supabase
-      .from('tags')
-      .select('*')
-      .order('name');
-    if (data) setTags(data);
-    setLoadingTags(false);
   }
 
   function toggleTag(tagId: string) {

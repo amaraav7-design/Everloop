@@ -76,7 +76,15 @@ export function WhatsAppConfig() {
     canEditSettings,
   } = useAuth();
 
+  const userId = user?.id;
   const [loading, setLoading] = useState(true);
+  const loadAccountId = userId ? accountId : null;
+  const [previousAccountId, setPreviousAccountId] = useState(loadAccountId);
+  if (loadAccountId !== previousAccountId) {
+    setPreviousAccountId(loadAccountId);
+    if (loadAccountId) setLoading(true);
+  }
+  const showLoading = loading && (authLoading || profileLoading || Boolean(userId && accountId));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -140,91 +148,103 @@ export function WhatsAppConfig() {
       ? `${window.location.origin}/api/whatsapp/webhook`
       : '';
 
-  const fetchConfig = useCallback(async (acctId: string) => {
-    setLoading(true);
-    try {
+  const fetchConfig = useCallback(
+    (acctId: string) => {
       // Load form values from Supabase (shows what's in DB).
       // Switched from `user_id` (which would only match the row's
       // original author) to `account_id` so every member of the
       // account sees the same saved configuration. UNIQUE(account_id)
       // on the table guarantees the .maybeSingle() return type
       // remains accurate.
-      const { data, error } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', acctId)
-        .maybeSingle();
+      const request = async () => {
+        return supabase
+          .from('whatsapp_config')
+          .select('*')
+          .eq('account_id', acctId)
+          .maybeSingle();
+      };
+      return request()
+        .then(async ({ data, error }) => {
+          if (error) {
+            console.error('Failed to load config row:', error);
+          }
 
-      if (error) {
-        console.error('Failed to load config row:', error);
-      }
+          if (data) {
+            setConfig(data);
+            setPhoneNumberId(data.phone_number_id || '');
+            setWabaId(data.waba_id || '');
+            setAccessToken(MASKED_TOKEN);
+            // Same treatment as the access token: the row carries the encrypted
+            // value, which is enough to know one exists. Show a mask instead of
+            // an empty box so nobody concludes the token was never saved.
+            setVerifyToken(data.verify_token ? MASKED_TOKEN : '');
+            setVerifyEdited(false);
+            setPin('');
+            setTokenEdited(false);
+            // Undefined on a row read before migration 039 — treat that as
+            // on, matching the webhook's own default.
+            setMirrorMedia(data.mirror_inbound_media !== false);
+          } else {
+            setConfig(null);
+            setPhoneNumberId('');
+            setWabaId('');
+            setAccessToken('');
+            setVerifyToken('');
+            setPin('');
+            setTokenEdited(false);
+            setVerifyEdited(false);
+            setMirrorMedia(true);
+          }
+          // Clear any stale probe result when reloading the row.
+          setRegistrationProbe(null);
 
-      if (data) {
-        setConfig(data);
-        setPhoneNumberId(data.phone_number_id || '');
-        setWabaId(data.waba_id || '');
-        setAccessToken(MASKED_TOKEN);
-        // Same treatment as the access token: the row carries the encrypted
-        // value, which is enough to know one exists. Show a mask instead of
-        // an empty box so nobody concludes the token was never saved.
-        setVerifyToken(data.verify_token ? MASKED_TOKEN : '');
-        setVerifyEdited(false);
-        setPin('');
-        setTokenEdited(false);
-        // Undefined on a row read before migration 039 — treat that as
-        // on, matching the webhook's own default.
-        setMirrorMedia(data.mirror_inbound_media !== false);
-      } else {
-        setConfig(null);
-        setPhoneNumberId('');
-        setWabaId('');
-        setAccessToken('');
-        setVerifyToken('');
-        setPin('');
-        setTokenEdited(false);
-        setVerifyEdited(false);
-        setMirrorMedia(true);
-      }
-      // Clear any stale probe result when reloading the row.
-      setRegistrationProbe(null);
+          // Then verify health via the API (decrypts token + pings Meta)
+          if (data) {
+            try {
+              const res = await fetch('/api/whatsapp/config', { method: 'GET' });
+              const payload = await res.json();
 
-      // Then verify health via the API (decrypts token + pings Meta)
-      if (data) {
-        try {
-          const res = await fetch('/api/whatsapp/config', { method: 'GET' });
-          const payload = await res.json();
-
-          if (payload.connected) {
-            setConnectionStatus('connected');
+              if (payload.connected) {
+                setConnectionStatus('connected');
+                setResetReason(null);
+                setStatusMessage('');
+                setStatusMeta(null);
+                setWabaSubscription(payload.waba_subscription ?? null);
+              } else {
+                setConnectionStatus('disconnected');
+                setResetReason(
+                  payload.needs_reset
+                    ? 'token_corrupted'
+                    : payload.reason === 'meta_api_error'
+                      ? 'meta_api_error'
+                      : null
+                );
+                setStatusMessage(payload.message || '');
+                setStatusMeta(payload.meta ?? null);
+                setWabaSubscription(null);
+              }
+            } catch (err) {
+              console.error('Health check failed:', err);
+              setConnectionStatus('disconnected');
+            }
+          } else {
+            setConnectionStatus('disconnected');
             setResetReason(null);
             setStatusMessage('');
             setStatusMeta(null);
-            setWabaSubscription(payload.waba_subscription ?? null);
-          } else {
-            setConnectionStatus('disconnected');
-            setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
-            setStatusMessage(payload.message || '');
-            setStatusMeta(payload.meta ?? null);
             setWabaSubscription(null);
           }
-        } catch (err) {
-          console.error('Health check failed:', err);
-          setConnectionStatus('disconnected');
-        }
-      } else {
-        setConnectionStatus('disconnected');
-        setResetReason(null);
-        setStatusMessage('');
-        setStatusMeta(null);
-        setWabaSubscription(null);
-      }
-    } catch (err) {
-      console.error('fetchConfig error:', err);
-      toast.error(t('loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase, t]);
+        })
+        .catch((err) => {
+          console.error('fetchConfig error:', err);
+          toast.error(t('loadFailed'));
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [supabase, t]
+  );
 
   useEffect(() => {
     // Need both the auth session (`!authLoading`) AND the profile
@@ -233,15 +253,14 @@ export function WhatsAppConfig() {
     // for the first render window and bail without ever retrying
     // once the profile arrives.
     if (authLoading || profileLoading) return;
-    if (!user || !accountId) {
+    if (!userId || !accountId) {
       loadedAccountIdRef.current = null;
-      setLoading(false);
       return;
     }
     if (loadedAccountIdRef.current === accountId) return;
     loadedAccountIdRef.current = accountId;
     fetchConfig(accountId);
-  }, [authLoading, profileLoading, user?.id, accountId, fetchConfig]);
+  }, [authLoading, profileLoading, userId, accountId, fetchConfig]);
 
   async function handleToggleMirrorMedia(next: boolean) {
     if (!config || !accountId || savingMirror) return;
@@ -379,7 +398,10 @@ export function WhatsAppConfig() {
         setPin('');
       }
 
-      if (accountId) await fetchConfig(accountId);
+      if (accountId) {
+        setLoading(true);
+        await fetchConfig(accountId);
+      }
     } catch (err) {
       console.error('Save error:', err);
       toast.error(t('saveFailed'));
@@ -439,7 +461,10 @@ export function WhatsAppConfig() {
           { duration: 8000 },
         );
       }
-      if (accountId) await fetchConfig(accountId);
+      if (accountId) {
+        setLoading(true);
+        await fetchConfig(accountId);
+      }
     } catch (err) {
       console.error('verify-registration failed:', err);
       toast.error(t('verifyEndpointUnreachable'));
@@ -490,7 +515,7 @@ export function WhatsAppConfig() {
     toast.success(t('webhookCopied'));
   }
 
-  if (loading) {
+  if (showLoading) {
     return (
       <section className="animate-in fade-in-50 duration-200">
         <SettingsPanelHead

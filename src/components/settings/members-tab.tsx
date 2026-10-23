@@ -140,40 +140,41 @@ export function MembersTab() {
     null,
   );
 
-  const loadEverything = useCallback(async () => {
-    try {
-      const [mres, ires] = await Promise.all([
-        fetch('/api/account/members', { cache: 'no-store' }),
-        canManageMembers
-          ? fetch('/api/account/invitations', { cache: 'no-store' })
-          : Promise.resolve(null),
-      ]);
-
-      if (!mres.ok) {
-        const payload = await mres.json().catch(() => ({}));
-        toast.error(payload.error || t('loadFailed'));
-        return;
-      }
-      const mdata = (await mres.json()) as { members: Member[] };
-      setMembers(mdata.members);
-
-      if (ires) {
-        if (!ires.ok) {
-          const payload = await ires.json().catch(() => ({}));
-          toast.error(payload.error || t('loadInvitationsFailed'));
+  const loadEverything = useCallback(() => {
+    return Promise.all([
+      fetch('/api/account/members', { cache: 'no-store' }),
+      canManageMembers
+        ? fetch('/api/account/invitations', { cache: 'no-store' })
+        : Promise.resolve(null),
+    ])
+      .then(async ([mres, ires]) => {
+        if (!mres.ok) {
+          const payload = await mres.json().catch(() => ({}));
+          toast.error(payload.error || t('loadFailed'));
           return;
         }
-        const idata = (await ires.json()) as { invitations: Invitation[] };
-        setInvitations(idata.invitations);
-      } else {
-        setInvitations([]);
-      }
-    } catch (err) {
-      console.error('[MembersTab] load error:', err);
-      toast.error(t('networkError'));
-    } finally {
-      setLoading(false);
-    }
+        const mdata = (await mres.json()) as { members: Member[] };
+        setMembers(mdata.members);
+
+        if (ires) {
+          if (!ires.ok) {
+            const payload = await ires.json().catch(() => ({}));
+            toast.error(payload.error || t('loadInvitationsFailed'));
+            return;
+          }
+          const idata = (await ires.json()) as { invitations: Invitation[] };
+          setInvitations(idata.invitations);
+        } else {
+          setInvitations([]);
+        }
+      })
+      .catch((err) => {
+        console.error('[MembersTab] load error:', err);
+        toast.error(t('networkError'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [canManageMembers, t]);
 
   useEffect(() => {
