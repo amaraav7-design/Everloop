@@ -117,9 +117,21 @@ curl https://your-crm.example.com/api/v1/me \
 
 ### `POST /api/v1/messages`
 
-Send a WhatsApp message to a phone number. Scope: `messages:send`. You
-pass an **E.164 number**, not an internal id — the endpoint
-finds-or-creates the contact + conversation, then sends.
+Send a WhatsApp message to an **E.164 phone number** using the `messages:send`
+scope. Template sends can create the contact and conversation. Text, media,
+and interactive sends require an existing conversation with an open 24-hour
+customer service window. Missing or expired windows return `409 reply_window_closed`.
+
+Marketing templates require a recorded WhatsApp opt-in for the exact
+destination. The API returns `409 marketing_consent_required` when proof is
+missing and `409 marketing_opt_out` when the recipient has opted out.
+Sync templates in Settings to verify their approval and category.
+
+Send an `Idempotency-Key` header to keep a request safe to replay. Use a
+unique key per logical send and reuse it with the same payload. The server
+returns the existing message identifiers for a completed attempt. A
+response of `delivery_uncertain` means the send may have reached Meta.
+Check delivery before submitting a new request key.
 
 `to` must start with `+` followed by the country code (`+14155550123`;
 spaces, dashes and parentheses between the digits are fine). A number
@@ -229,15 +241,18 @@ first (`404` otherwise).
 
 ### `POST /api/v1/broadcasts`
 
-Launch a template broadcast to a list of recipients. Scope:
-`broadcasts:send`. The broadcast + its recipient rows are persisted
-immediately and the sends fan out in the background, so the call
-returns fast — poll `GET /api/v1/broadcasts/{id}` for progress.
+Launch an approved WhatsApp template campaign. Scope `broadcasts:send`.
+In workspaces enabled for background delivery, Everloop saves the campaign
+and its personalized recipients in one transaction. A worker runs independently
+of the request. Poll `GET /api/v1/broadcasts/{id}` for status.
+
+Set `CAMPAIGN_REQUEST_ID` to a new ID for each campaign and reuse it for retries.
 
 ```bash
 curl -X POST https://your-crm.example.com/api/v1/broadcasts \
   -H "Authorization: Bearer wacrm_live_xxx" \
   -H "Content-Type: application/json" \
+  -H "Idempotency-Key: ${CAMPAIGN_REQUEST_ID}" \
   -d '{
         "name": "July promo",
         "template_name": "promo_july",
@@ -252,25 +267,38 @@ curl -X POST https://your-crm.example.com/api/v1/broadcasts \
 Recipients are capped at **1000 per request** — split larger sends.
 Invalid phone numbers — including any without a leading `+` and country
 code — are dropped and counted as `rejected`; if none are valid the
-request fails with `400 bad_request`. Response (202):
+request returns `400 bad_request`. For the worker-enabled path, the same
+idempotency key and payload return the existing campaign. Reusing the key with a
+different payload returns 409. Supply optional `scheduled_at` as an ISO timestamp
+with an explicit zone offset, such as `2026-12-01T09:00:00+05:30`.
+
+`accepted` counts recipients eligible when queued. The `excluded` field includes
+missing consent, opt-outs, or invalid template inputs. The worker checks current
+eligibility again before sending. Workspaces outside the worker rollout keep the
+legacy immediate endpoint behavior and cannot schedule or use campaign launch keys.
+
+Response (202)
 
 ```json
 {
   "data": {
     "broadcast_id": "…",
-    "status": "sending",
+    "status": "queued",
     "total_recipients": 2,
     "accepted": 2,
-    "rejected": 0
+    "rejected": 0,
+    "excluded": 0
   }
 }
 ```
 
 ### `GET /api/v1/broadcasts/{id}`
 
-Broadcast status + counts. Scope: `broadcasts:send`. `status` moves
-`sending` → `sent`; `delivered_count` / `read_count` keep climbing as
-Meta delivery webhooks arrive. `404` for another account's broadcast.
+Campaign status and counts. Scope `broadcasts:send`. Worker-backed campaigns
+can be scheduled, queued, sending, paused, sent, partial, failed, or canceled.
+Everloop counts Meta acceptance, delivery, explicit reads, replies, failures,
+exclusions, and unconfirmed sends separately. An account receives 404 for
+campaigns outside its workspace.
 
 ## Pagination
 

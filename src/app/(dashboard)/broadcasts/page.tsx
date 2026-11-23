@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
@@ -25,6 +26,10 @@ import { useTranslations } from 'next-intl';
  * counts consistent; we just need to surface the freshest snapshot.
  */
 const POLL_INTERVAL_MS = 5_000;
+
+function campaignHref(campaign: Broadcast) {
+  return campaign.status === 'draft' ? `/broadcasts/new?draft=${campaign.id}` : `/broadcasts/${campaign.id}`;
+}
 
 function percent(numerator: number, denominator: number): number {
   if (!denominator) return 0;
@@ -96,7 +101,7 @@ export default function BroadcastsPage() {
   }, [fetchBroadcasts]);
 
   const anySending = useMemo(
-    () => broadcasts.some((b) => b.status === 'sending'),
+    () => broadcasts.some((b) => ['sending', 'queued', 'scheduled'].includes(b.status)),
     [broadcasts],
   );
 
@@ -185,7 +190,7 @@ export default function BroadcastsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -221,7 +226,25 @@ export default function BroadcastsPage() {
           </GatedButton>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <>
+          <ul className="grid gap-2 sm:hidden">
+            {broadcasts.map(campaign => {
+              const status = getBroadcastStatus(campaign.status);
+              return (
+                <li key={campaign.id}>
+                  <Link href={campaignHref(campaign)} className="block rounded-xl border border-border bg-card p-4 hover:bg-muted">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words font-medium">{campaign.name}</span>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${status.classes}`}>{tStatus(status.label)}</span>
+                    </div>
+                    <p className="mt-2 break-words text-sm text-muted-foreground">{campaign.template_name}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{t('mobileDelivery', { delivered: campaign.delivered_count, total: campaign.total_recipients })}</p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card sm:block">
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
@@ -243,10 +266,10 @@ export default function BroadcastsPage() {
                   <TableRow
                     key={broadcast.id}
                     className="cursor-pointer border-border hover:bg-muted/50"
-                    onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
+                    onClick={() => router.push(campaignHref(broadcast))}
                   >
                     <TableCell className="font-medium text-foreground">
-                      {broadcast.name}
+                      <Link href={campaignHref(broadcast)} onClick={event => event.stopPropagation()}>{broadcast.name}</Link>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">
                       {broadcast.template_name}
@@ -289,7 +312,8 @@ export default function BroadcastsPage() {
               })}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

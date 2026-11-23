@@ -2,6 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  if (['/everloop-sw.js', '/manifest.webmanifest', '/everloop/offline.html', '/api/whatsapp/webhook/drain', '/api/whatsapp/campaigns/drain'].includes(request.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -63,8 +66,11 @@ export async function middleware(request: NextRequest) {
       url.pathname = `/join/${encodeURIComponent(inviteToken)}`
       url.search = ''
     } else {
-      url.pathname = '/dashboard'
+      const conversation = request.nextUrl.searchParams.get('c')
+      const inbox = request.nextUrl.searchParams.get('openInbox') === '1'
+      url.pathname = inbox ? '/inbox' : '/dashboard'
       url.search = ''
+      if (inbox && conversation && /^[0-9a-f-]{36}$/i.test(conversation)) url.searchParams.set('c', conversation)
     }
     return withRefreshedCookies(NextResponse.redirect(url))
   }
@@ -76,6 +82,7 @@ export async function middleware(request: NextRequest) {
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    if (request.nextUrl.pathname === '/inbox') url.searchParams.set('openInbox', '1')
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 

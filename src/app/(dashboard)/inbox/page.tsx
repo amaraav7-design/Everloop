@@ -14,6 +14,7 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { parseInboxFilter } from "@/lib/inbox/inbox-filters";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -59,6 +60,7 @@ function InboxPageInner() {
    * automatically instead of showing the empty center panel.
    */
   const deepLinkConvId = searchParams.get("c");
+  const [mobileContactId, setMobileContactId] = useState<string | null>(null);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -398,51 +400,47 @@ function InboxPageInner() {
     setResyncToken((n) => n + 1);
   }, []);
 
+  const activeConversationId = activeConversation?.id;
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
       setConversations(loaded);
-      // Resolve a pending deep-link here rather than in an effect — this
-      // is an event handler, so the setState calls below are allowed by
-      // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
-      // via the ref, so realtime refreshes of the list can't snap the
-      // user back to the deep-linked thread after they've navigated.
-      if (
-        deepLinkConvId &&
-        autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
-        loaded.length > 0
-      ) {
-        autoSelectedForDeepLinkRef.current = deepLinkConvId;
-        // If the deep-linked conversation is already the active one
-        // (e.g. because the user clicked it in the list and we
-        // router.replace()'d the URL, which made the ConversationList
-        // refetch and land us back here), do NOT re-apply it. Doing so
-        // would setMessages([]) on a thread whose messages have
-        // already been loaded by MessageThread — and because
-        // conversationId didn't change, MessageThread wouldn't
-        // refetch. The thread would read "No messages yet" until a
-        // full page reload rehydrated state from scratch.
-        if (activeConversation?.id === deepLinkConvId) return;
-        const match = loaded.find((c) => c.id === deepLinkConvId);
-        if (match) {
-          setActiveConversation(match);
-          setActiveContact(match.contact ?? null);
-          setMessages([]);
-          // Mirror the optimistic unread reset that handleSelectConversation
-          // does — the user just deep-linked into this conv, treat that the
-          // same as a click. Leaves activeConversation.unread_count alone so
-          // the MessageThread reset effect still fires the server UPDATE.
-          if (match.unread_count > 0) {
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === match.id ? { ...c, unread_count: 0 } : c,
-              ),
-            );
-          }
+      if (activeConversationId) {
+        const latest = loaded.find((c) => c.id === activeConversationId);
+        const latestInbound = latest?.last_inbound_at;
+        if (latest && latestInbound) {
+          setActiveConversation((current) => {
+            if (!current || current.id !== latest.id) return current;
+            const currentInbound = current.last_inbound_at;
+            if (currentInbound && Date.parse(currentInbound) >= Date.parse(latestInbound)) {
+              return current;
+            }
+            return { ...current, last_inbound_at: latestInbound };
+          });
         }
       }
     },
-    [deepLinkConvId, activeConversation?.id]
+    [activeConversationId]
   );
+
+  useEffect(() => {
+    if (!deepLinkConvId || autoSelectedForDeepLinkRef.current === deepLinkConvId ||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(deepLinkConvId)) return;
+    const controller = new AbortController();
+    async function loadLinkedConversation() {
+      const db = createClient();
+      const { data, error } = await db.from("conversations").select(CONVERSATION_SELECT)
+        .eq("id", deepLinkConvId).abortSignal(controller.signal).maybeSingle();
+      if (controller.signal.aborted) return;
+      if (error || !data) return;
+      const linked = normalizeConversation(data);
+      autoSelectedForDeepLinkRef.current = linked.id;
+      setActiveConversation(linked);
+      setActiveContact(linked.contact ?? null);
+      setMessages([]);
+    }
+    void loadLinkedConversation();
+    return () => controller.abort();
+  }, [deepLinkConvId]);
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
@@ -565,7 +563,7 @@ function InboxPageInner() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
@@ -628,6 +626,7 @@ function InboxPageInner() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            onShowMobileContact={activeContact ? () => setMobileContactId(activeContact.id) : undefined}
           />
         </div>
 
@@ -640,6 +639,12 @@ function InboxPageInner() {
             <ContactSidebar contact={activeContact} />
           </div>
         )}
+        <Sheet open={Boolean(activeContact && mobileContactId === activeContact.id)} onOpenChange={open => { if (!open) setMobileContactId(null); }}>
+          <SheetContent side="bottom" className="h-[80dvh] gap-0 pb-[env(safe-area-inset-bottom)] lg:hidden">
+            <SheetHeader><SheetTitle>{t("mobileContactDetails")}</SheetTitle></SheetHeader>
+            <div className="min-h-0 flex-1"><ContactSidebar contact={activeContact} fullWidth /></div>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

@@ -415,6 +415,23 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
+          <ul className="grid gap-2 lg:hidden">
+            {deals.map(deal => (
+              <li key={deal.id} className="grid gap-2 rounded-lg border border-border bg-card p-3">
+                <span className="break-words text-sm font-medium">{deal.title}</span>
+                <select
+                  value={deal.stage_id}
+                  aria-label={t("mobileStage", { deal: deal.title })}
+                  disabled={!canCreateDeals}
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-base"
+                  onChange={event => void handleDealMoved(deal.id, event.target.value)}
+                >
+                  {stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
+                </select>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden lg:block">
           <PipelineBoard
             stages={stages}
             deals={deals}
@@ -422,6 +439,7 @@ export default function PipelinesPage() {
             onAddDeal={handleAddDeal}
             onEditDeal={handleEditDeal}
           />
+          </div>
         </>
       )}
 

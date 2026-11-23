@@ -22,7 +22,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
-import { SendMessageError } from '@/lib/whatsapp/send-message';
+import { replyWindowClosedError, SendMessageError } from '@/lib/whatsapp/send-message';
+import { isReplyWindowOpen } from '@/lib/whatsapp/reply-window';
 import { resolveAuditUserId, ContactError } from '@/lib/api/v1/contacts';
 
 export interface ResolvedConversation {
@@ -42,7 +43,8 @@ export async function resolveConversationByPhone(
   db: SupabaseClient,
   accountId: string,
   phone: string,
-  name?: string | null
+  name?: string | null,
+  { requireOpenWindow = false }: { requireOpenWindow?: boolean } = {},
 ): Promise<ResolvedConversation> {
   // Raw integrator input: the leading `+` is required so the country
   // code is explicit — "4155551212" would otherwise be delivered to
@@ -71,6 +73,20 @@ export async function resolveConversationByPhone(
     );
   }
 
+  const existing = await findExistingContact(db, accountId, sanitized);
+  if (requireOpenWindow) {
+    if (!existing) throw replyWindowClosedError();
+    const conversation = await findConversationRow(db, accountId, existing.id);
+    if (!conversation || !isReplyWindowOpen(conversation.last_inbound_at)) {
+      throw replyWindowClosedError();
+    }
+    if (name && name !== existing.name) {
+      await db.from('contacts').update({ name, updated_at: new Date().toISOString() })
+        .eq('id', existing.id).eq('account_id', accountId);
+    }
+    return { conversationId: conversation.id, contactId: existing.id, contactCreated: false };
+  }
+
   // Audit user for created rows = the single account-wide default used
   // by every public-API write (see resolveAuditUserId), so a contact
   // created here is attributed identically to one created via
@@ -91,7 +107,6 @@ export async function resolveConversationByPhone(
   let contactId: string;
   let contactCreated = false;
 
-  const existing = await findExistingContact(db, accountId, sanitized);
   if (existing) {
     contactId = existing.id;
     if (name && name !== existing.name) {
@@ -167,22 +182,8 @@ async function findOrCreateConversationRow(
   contactId: string,
   ownerUserId: string
 ): Promise<string> {
-  const { data: existing, error: findErr } = await db
-    .from('conversations')
-    .select('id')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  if (findErr) {
-    console.error('[resolve-conversation] conversation lookup error:', findErr);
-    throw new SendMessageError('db_error', 'Failed to resolve conversation', 500);
-  }
-
-  if (existing && existing.length > 0) {
-    return existing[0].id;
-  }
+  const existing = await findConversationRow(db, accountId, contactId);
+  if (existing) return existing.id;
 
   const { data: newConv, error: convErr } = await db
     .from('conversations')
@@ -196,20 +197,27 @@ async function findOrCreateConversationRow(
 
   if (convErr || !newConv) {
     if (isUniqueViolation(convErr)) {
-      const { data: raced } = await db
-        .from('conversations')
-        .select('id')
-        .eq('account_id', accountId)
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: true })
-        .limit(1);
-      if (raced && raced.length > 0) {
-        return raced[0].id;
-      }
+      const raced = await findConversationRow(db, accountId, contactId);
+      if (raced) return raced.id;
     }
     console.error('[resolve-conversation] conversation create error:', convErr);
     throw new SendMessageError('db_error', 'Failed to create conversation', 500);
   }
 
   return newConv.id;
+}
+
+async function findConversationRow(db: SupabaseClient, accountId: string, contactId: string) {
+  const { data, error } = await db
+    .from('conversations')
+    .select('id, last_inbound_at')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error) {
+    console.error('[resolve-conversation] conversation lookup error:', error);
+    throw new SendMessageError('db_error', 'Failed to resolve conversation', 500);
+  }
+  return data?.[0] ?? null;
 }

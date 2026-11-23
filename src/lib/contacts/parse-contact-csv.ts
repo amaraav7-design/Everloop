@@ -10,6 +10,7 @@ export interface ParsedContactRow {
   company?: string;
   /** Tag names from the optional `tags` column (comma/semicolon separated). */
   tagNames: string[];
+  marketingConsent?: { occurred_at: string; evidence: string };
 }
 
 /** Split a CSV cell into unique tag names (case-insensitive de-dupe). */
@@ -75,6 +76,8 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
   const emailIdx = headers.indexOf('email');
   const companyIdx = headers.indexOf('company');
   const tagsIdx = headers.indexOf('tags');
+  const consentAtIdx = headers.indexOf('whatsapp_opt_in_at');
+  const consentEvidenceIdx = headers.indexOf('whatsapp_opt_in_evidence');
 
   const rows: ParsedContactRow[] = [];
 
@@ -90,6 +93,8 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     // had no phone" instead of the row just vanishing with the total
     // row count silently short of what's actually in the file.
     const phone = values[phoneIdx]?.replace(/["']/g, '').trim() ?? '';
+    const consentAt = values[consentAtIdx];
+    const consentEvidence = values[consentEvidenceIdx];
 
     rows.push({
       phone,
@@ -107,6 +112,9 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
           : undefined,
       tagNames:
         tagsIdx >= 0 ? parseTagCell(values[tagsIdx]?.replace(/["']/g, '')) : [],
+      ...(consentAt && consentEvidence ? {
+        marketingConsent: { occurred_at: consentAt, evidence: consentEvidence },
+      } : {}),
     });
   }
 

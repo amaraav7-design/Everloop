@@ -8,10 +8,15 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { embedTexts } from '@/lib/ai/embeddings'
-import { AiError, type AiProvider } from '@/lib/ai/types'
+import { AiError, isAiProvider } from '@/lib/ai/types'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
+import { managedAutoReplyEnabled } from '@/lib/ai/managed-providers'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/lib/ai/providers/openai-compatible'
 import { canReuseStoredAiKey } from '@/lib/ai/stored-key'
 import { getT } from '@/lib/i18n/translate'
+
+import { isManagedProvider, validateManagedModel } from '@/lib/ai/managed-providers'
+import { decryptAiConnection, readAiConnection } from '@/lib/ai/provider-connections'
 
 const t = getT('Api')
 
@@ -54,7 +59,7 @@ export async function GET() {
     const { api_key, embeddings_api_key, ...safe } = data
     return NextResponse.json({
       configured: true,
-      has_key: !!api_key,
+      has_key: isManagedProvider(safe.provider) || !!api_key,
       has_embeddings_key: !!embeddings_api_key,
       ...safe,
     })
@@ -82,8 +87,8 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') return bad(t('common.invalidRequestBody'))
 
-    const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic' && provider !== 'openai_compatible') {
+    const provider: unknown = body.provider
+    if (!isAiProvider(provider)) {
       return bad(t('ai.providerInvalid'))
     }
     const model = typeof body.model === 'string' ? body.model.trim() : ''
@@ -97,7 +102,10 @@ export async function POST(request: Request) {
         ? body.system_prompt.trim()
         : null
     const isActive = body.is_active === true
-    const autoReplyEnabled = body.auto_reply_enabled === true
+    const managedProvider = isManagedProvider(provider) ? provider : null
+    const freeOnly = provider === 'google_ai_studio' || body.free_only !== false
+    const autoReplyEnabled = body.auto_reply_enabled === true &&
+      (!managedProvider || (provider === 'openrouter' && managedAutoReplyEnabled(accountId)))
 
     let maxPer = Number(body.auto_reply_max_per_conversation)
     if (!Number.isFinite(maxPer)) maxPer = 3
@@ -123,6 +131,9 @@ export async function POST(request: Request) {
     }
 
     const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
+    if (rawKey.length > 4096) return bad(t('ai.apiKeyRequired'))
+    if (managedProvider) validateManagedModel(managedProvider, model, freeOnly)
+    const connection = managedProvider ? await readAiConnection(accountId, managedProvider) : null
 
     // Embeddings key (optional, for semantic KB search): a non-empty
     // string sets/replaces it; an explicit null clears it; absent leaves
@@ -158,7 +169,9 @@ export async function POST(request: Request) {
     }
     if (rawKey) {
       apiKeyPlain = rawKey
-    } else if (existing?.api_key && canReuseStoredAiKey(existing, provider, baseUrl)) {
+    } else if (connection?.api_key) {
+      apiKeyPlain = decryptAiConnection(connection.api_key)
+    } else if (!managedProvider && existing?.api_key && canReuseStoredAiKey(existing, provider, baseUrl)) {
       try {
         apiKeyPlain = decrypt(existing.api_key)
       } catch {
@@ -177,7 +190,8 @@ export async function POST(request: Request) {
       rawKey !== '' ||
       provider !== existing.provider ||
       model !== existing.model ||
-      baseUrl !== (existing.base_url ?? null)
+      baseUrl !== (existing.base_url ?? null) ||
+      (managedProvider !== null && connection?.free_only !== freeOnly)
 
     if (credentialsChanged) {
       try {
@@ -185,6 +199,7 @@ export async function POST(request: Request) {
           provider,
           model,
           apiKey: apiKeyPlain,
+          ...(managedProvider ? { freeOnly } : {}),
           baseUrl,
           systemPrompt,
           isActive,
@@ -241,7 +256,13 @@ export async function POST(request: Request) {
       shared.embeddings_api_key = null
     }
 
-    if (existing) {
+    if (managedProvider) {
+      const { error } = await supabaseAdmin().rpc('save_ai_provider_connection', {
+        p_account: accountId, p_user: userId, p_provider: managedProvider, p_model: model, p_key: encryptedKey,
+        p_free_only: freeOnly, p_config: shared,
+      })
+      if (error) return NextResponse.json({ error: t('ai.saveConfigFailed') }, { status: 500 })
+    } else if (existing) {
       const { error: upErr } = await supabase
         .from('ai_configs')
         .update(encryptedKey ? { ...shared, api_key: encryptedKey } : shared)
@@ -271,6 +292,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    if (err instanceof AiError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status })
     return toErrorResponse(err)
   }
 }

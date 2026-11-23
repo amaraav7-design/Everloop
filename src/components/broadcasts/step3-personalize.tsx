@@ -29,6 +29,10 @@ interface Step3Props {
   /** Media URL for an IMAGE/VIDEO/DOCUMENT header, when the template has one. */
   headerMediaUrl: string;
   onHeaderMediaUrlChange: (url: string) => void;
+  headerText: string;
+  onHeaderTextChange: (text: string) => void;
+  buttonParams: Record<string, string>;
+  onButtonParamsChange: (params: Record<string, string>) => void;
   onNext: () => void;
   onBack: () => void;
 }
@@ -43,7 +47,7 @@ function isMediaHeaderType(value: unknown): value is MediaHeaderType {
 function isValidHttpUrl(value: string): boolean {
   try {
     const u = new URL(value);
-    return u.protocol === 'http:' || u.protocol === 'https:';
+    return u.protocol === 'https:';
   } catch {
     return false;
   }
@@ -73,6 +77,7 @@ export function Step3Personalize({
   onUpdate,
   headerMediaUrl,
   onHeaderMediaUrlChange,
+  headerText, onHeaderTextChange, buttonParams, onButtonParamsChange,
   onNext,
   onBack,
 }: Step3Props) {
@@ -133,6 +138,11 @@ export function Step3Personalize({
     if (!matches) return [];
     return [...new Set(matches)].sort();
   }, [template.body_text]);
+
+  const hasDynamicHeader = template.header_type === 'text' && /{{\s*\d+\s*}}/.test(template.header_content ?? '');
+  const dynamicButtons = (template.buttons ?? []).flatMap((button, index) =>
+    button.type === 'URL' && /{{\s*\d+\s*}}/.test(button.url) ? [{ index, label: button.text }] : []);
+  const needsOptions = (hasDynamicHeader && !headerText.trim()) || dynamicButtons.some(({ index }) => !buttonParams[index]?.trim());
 
   // Templates with an IMAGE/VIDEO/DOCUMENT header need a media URL at
   // send time — Meta requires the media component on every delivery and
@@ -246,6 +256,22 @@ export function Step3Personalize({
           {t('personalize.subtitle')}
         </p>
       </div>
+
+      {hasDynamicHeader && (
+        <div className="space-y-2">
+          <label htmlFor="campaign-header-text" className="text-sm font-medium">{t('personalize.headerValue')}</label>
+          <Input id="campaign-header-text" value={headerText} maxLength={60} onChange={event => onHeaderTextChange(event.target.value)} />
+        </div>
+      )}
+
+      {dynamicButtons.map(({ index, label }) => (
+        <div key={index} className="space-y-2">
+          <label htmlFor={`campaign-button-${index}`} className="text-sm font-medium">{t('personalize.buttonSuffix', { label })}</label>
+          <Input id={`campaign-button-${index}`} value={buttonParams[index] ?? ''} maxLength={512}
+            onChange={event => onButtonParamsChange({ ...buttonParams, [index]: event.target.value })} />
+        </div>
+      ))}
+
 
       {mediaHeaderType && (
         <div className="rounded-xl border border-border bg-card/50 p-4">
@@ -445,7 +471,7 @@ export function Step3Personalize({
         </Button>
         <Button
           onClick={onNext}
-          disabled={unmappedKeys.length > 0 || headerMediaError !== null}
+          disabled={needsOptions || unmappedKeys.length > 0 || headerMediaError !== null}
           className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {t('next')}

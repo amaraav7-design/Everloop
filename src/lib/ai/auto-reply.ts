@@ -1,7 +1,10 @@
 import { supabaseAdmin } from './admin-client'
+import { isReplyWindowOpen } from '@/lib/whatsapp/reply-window'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
+import { isManagedProvider } from './managed-providers'
+import { AiError } from './types'
 import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
@@ -42,10 +45,7 @@ interface DispatchArgs {
  *   - auto-reply was disabled for this conversation (prior handoff)
  *   - the per-conversation reply cap is reached
  *   - there's nothing to reply to
- *
- * The 24h WhatsApp session window is inherently open here — we're
- * reacting to a customer message that just landed — so no separate
- * window check is needed.
+ *   - the WhatsApp reply window has closed, including delayed webhooks
  */
 export async function dispatchInboundToAiReply(
   args: DispatchArgs,
@@ -83,10 +83,13 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, last_inbound_at')
       .eq('id', conversationId)
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
       .maybeSingle()
     if (convErr || !conv) return
+    if (!isReplyWindowOpen(conv.last_inbound_at)) return
     if (conv.assigned_agent_id) return // a human owns this thread
     if (conv.ai_autoreply_disabled) return // handed off / turned off here
     // Cheap early-out; the authoritative cap check is the atomic claim
@@ -136,48 +139,30 @@ export async function dispatchInboundToAiReply(
       knowledge,
     })
 
-    const { text, handoff, usage } = await generateReply({
-      config,
-      systemPrompt,
-      messages,
-    })
-
-    // Record token spend on the account's BYO key. Fire-and-forget so it
-    // never adds latency to the customer-facing send: `logAiUsage`
-    // swallows its own errors, so the floating promise can't reject.
-    // Logged regardless of handoff — the provider call happened either
-    // way.
-    void logAiUsage(db, {
-      accountId,
-      conversationId,
-      mode: 'auto_reply',
-      provider: config.provider,
-      model: config.model,
-      usage,
-    })
-
-    if (handoff || !text) {
-      // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
-      // (sticky until re-enabled), (b) route the conversation to the
-      // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
-      // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
-      const summary = buildHandoffSummary({
-        messages,
-        replyCount: conv.ai_reply_count ?? 0,
-      })
-      const update: Record<string, unknown> = {
-        ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
-      }
-      // Only set the assignee when a target is configured AND the thread
-      // isn't already owned — never stomp an existing human assignment.
-      if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
-      }
+    async function handOff() {
+      const summary = buildHandoffSummary({ messages, replyCount: conv?.ai_reply_count ?? 0 })
+      const update: Record<string, unknown> = { ai_autoreply_disabled: true, ai_handoff_summary: summary }
+      if (config?.handoffAgentId && !conv?.assigned_agent_id) update.assigned_agent_id = config.handoffAgentId
       await db.from('conversations').update(update).eq('id', conversationId)
+        .eq('account_id', accountId).is('assigned_agent_id', null)
+    }
+
+    let generation: Awaited<ReturnType<typeof generateReply>>
+    try {
+      generation = await generateReply({ config, systemPrompt, messages })
+    } catch (error) {
+      if (!isManagedProvider(config.provider)) throw error
+      await logAiUsage(db, {
+        accountId, conversationId, mode: 'auto_reply', provider: config.provider, model: config.model, usage: null,
+        outcome: error instanceof AiError && error.code === 'rate_limited' ? 'rate_limited' : 'provider_error',
+      })
+      await handOff()
+      return
+    }
+    const { text, handoff, usage, resolvedModel } = generation
+    await logAiUsage(db, { accountId, conversationId, mode: 'auto_reply', provider: config.provider, model: resolvedModel ?? config.model, usage })
+    if (handoff || !text) {
+      await handOff()
       return
     }
 
@@ -193,13 +178,14 @@ export async function dispatchInboundToAiReply(
     // another inbound just took the last slot, `claimed` is false and we
     // skip the send. (We consume a slot slightly before the send lands —
     // fail-safe: under-reply rather than over-reply.)
-    const { data: claimed, error: claimErr } = await db.rpc(
-      'claim_ai_reply_slot',
-      {
-        conversation_id: conversationId,
-        max_replies: config.autoReplyMaxPerConversation,
-      },
-    )
+    const managed = isManagedProvider(config.provider)
+    if (managed && !inboundMessageId) return
+    const { data: claimed, error: claimErr } = managed
+      ? await db.rpc('claim_managed_ai_reply', {
+        p_account: accountId, p_conversation: conversationId, p_inbound: inboundMessageId,
+        p_max: config.autoReplyMaxPerConversation,
+      })
+      : await db.rpc('claim_ai_reply_slot', { conversation_id: conversationId, max_replies: config.autoReplyMaxPerConversation })
     if (claimErr) {
       // A real error here (vs. losing the cap race) is almost always a
       // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the

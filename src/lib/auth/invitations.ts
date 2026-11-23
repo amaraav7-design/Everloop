@@ -72,6 +72,52 @@ export function inviteUrl(token: string, baseUrl: string): string {
   return `${trimmed}/join/${token}`;
 }
 
+function isLoopback(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function parseInviteOrigin(value: string, allowLocalHttp: boolean): URL | null {
+  try {
+    const url = new URL(value);
+    const secure = url.protocol === "https:";
+    const local = allowLocalHttp && url.protocol === "http:" && isLoopback(url.hostname);
+    if ((!secure && !local) || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** Only an operator-configured origin or explicitly trusted host may receive an invite token. */
+export function resolveInviteOrigin(request: Request): string | null {
+  const development = process.env.NODE_ENV !== "production";
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) return parseInviteOrigin(configured, development)?.origin ?? null;
+
+  const allowedHosts = new Set(
+    (process.env.ALLOWED_INVITE_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()),
+  );
+  const candidates = [
+    request.headers.get("x-forwarded-host")?.split(",")[0],
+    request.headers.get("host"),
+  ];
+  for (const candidate of candidates) {
+    const host = candidate?.trim().toLowerCase();
+    if (!host || !allowedHosts.has(host)) continue;
+    const url = parseInviteOrigin(`https://${host}`, false);
+    if (url?.host === host) return url.origin;
+  }
+
+  if (development) {
+    const origin = new URL(request.url).origin;
+    const url = parseInviteOrigin(origin, true);
+    if (url && isLoopback(url.hostname)) return url.origin;
+  }
+  return null;
+}
+
 /**
  * Compute the `expires_at` timestamp for a new invite.
  *

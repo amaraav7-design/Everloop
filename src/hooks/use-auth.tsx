@@ -1,5 +1,6 @@
 "use client";
 
+import { revokePushOnThisDevice } from "@/lib/notifications/push-device";
 import {
   createContext,
   useContext,
@@ -382,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const supabase = createClient();
+    await revokePushOnThisDevice().catch(() => {});
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);

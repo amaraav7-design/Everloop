@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -15,9 +15,11 @@ import {
   THEME_IDS,
 } from "@/lib/themes";
 
-const inter = Inter({
+const inter = localFont({
+  src: "./fonts/inter-latin.woff2",
+  weight: "100 900",
+  display: "swap",
   variable: "--font-sans",
-  subsets: ["latin"],
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,16 +32,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Everloop",
+    template: "%s — Everloop",
   },
   robots: {
     index: false,
     follow: false,
   },
+  applicationName: "Everloop",
   icons: {
-    icon: [{ url: "/icon" }],
+    icon: [{ url: "/everloop/mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/everloop/icon-180.png", sizes: "180x180", type: "image/png" }],
   },
+  appleWebApp: { capable: true, title: "Everloop" },
   formatDetection: {
     email: false,
     address: false,
@@ -48,7 +53,8 @@ const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020617",
+  themeColor: "#133b2b",
+  viewportFit: "cover",
   colorScheme: "dark light",
 };
 

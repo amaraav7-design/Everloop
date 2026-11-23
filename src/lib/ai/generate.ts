@@ -2,6 +2,7 @@ import {
   AiError,
   type AiConfig,
   type AiUsage,
+  type ProviderResult,
   type ChatMessage,
   type GenerateResult,
 } from './types'
@@ -9,6 +10,7 @@ import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
 import { generateOpenAi } from './providers/openai'
 import { generateOpenAiCompatible } from './providers/openai-compatible'
 import { generateAnthropic } from './providers/anthropic'
+import { MANAGED_PROVIDER_LABEL, MANAGED_PROVIDER_URL, redactAiText, validateManagedModel } from './managed-providers'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -16,6 +18,7 @@ export interface GenerateArgs {
   systemPrompt: string
   /** Recent conversation turns, oldest first. */
   messages: ChatMessage[]
+  synthetic?: boolean
 }
 
 /**
@@ -35,7 +38,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     baseUrl: config.baseUrl,
   }
 
-  let result: { text: string; usage: AiUsage | null }
+  let result: ProviderResult
   switch (config.provider) {
     case 'openai':
       result = await generateOpenAi(providerArgs)
@@ -43,6 +46,32 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     case 'openai_compatible':
       result = await generateOpenAiCompatible(providerArgs)
       break
+    case 'openrouter':
+    case 'google_ai_studio': {
+      const provider = config.provider
+      const freeOnly = config.freeOnly !== false
+      validateManagedModel(provider, config.model, freeOnly)
+      if (provider === 'google_ai_studio' && !args.synthetic) {
+        throw new AiError('Google AI Studio is available for synthetic testing. Choose another connection for customer drafts.', {
+          code: 'synthetic_only', status: 403,
+        })
+      }
+      const openRouterRouting = provider === 'openrouter' ? {
+        provider: {
+          ...(!args.synthetic ? { data_collection: 'deny', zdr: true } : {}),
+          ...(freeOnly ? { max_price: { prompt: 0, completion: 0, request: 0 } } : {}),
+        },
+      } : undefined
+      const scopedArgs = args.synthetic ? providerArgs : {
+        ...providerArgs,
+        systemPrompt: redactAiText(systemPrompt.slice(0, 12_000)),
+        messages: messages.slice(-10).map(message => ({ ...message, content: redactAiText(message.content.slice(0, 2000)) })),
+      }
+      result = await generateOpenAiCompatible({ ...scopedArgs, baseUrl: MANAGED_PROVIDER_URL[provider] }, {
+        body: openRouterRouting, label: MANAGED_PROVIDER_LABEL[provider], suppressUpstreamError: true,
+      })
+      break
+    }
     case 'anthropic':
       result = await generateAnthropic(providerArgs)
       break
@@ -53,7 +82,8 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
       })
   }
 
-  return parseGeneration(result.text, result.usage)
+  const generation = parseGeneration(result.text, result.usage)
+  return result.resolvedModel ? { ...generation, resolvedModel: result.resolvedModel } : generation
 }
 
 /**

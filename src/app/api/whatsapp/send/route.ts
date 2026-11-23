@@ -9,6 +9,7 @@ import {
 import {
   sendMessageToConversation,
   validateSendMessageParams,
+  replyWindowClosedError,
   SendMessageError,
 } from '@/lib/whatsapp/send-message'
 import { getT } from '@/lib/i18n/translate'
@@ -44,7 +45,10 @@ export async function POST(request: Request) {
       return rateLimitResponse(limit)
     }
 
-    const body = await request.json()
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: t('common.invalidRequestBody') }, { status: 400 })
+    }
     const {
       // `conversation_id` targets an existing thread (inbox). `contact_id`
       // lets a caller initiate from a contact that may have no conversation
@@ -76,20 +80,13 @@ export async function POST(request: Request) {
     // Validate the message shape up front — before the contact_id path
     // finds-or-creates a conversation — so an invalid payload 400s
     // without leaving an orphan empty conversation behind.
-    try {
-      validateSendMessageParams({
-        messageType: message_type,
-        contentText: content_text,
-        mediaUrl: media_url,
-        templateName: template_name,
-        interactivePayload: interactive_payload,
-      })
-    } catch (err) {
-      if (err instanceof SendMessageError) {
-        return NextResponse.json({ error: err.message }, { status: err.status })
-      }
-      throw err
-    }
+    validateSendMessageParams({
+      messageType: message_type,
+      contentText: content_text,
+      mediaUrl: media_url,
+      templateName: template_name,
+      interactivePayload: interactive_payload,
+    })
 
     // Resolve the target conversation. With `conversation_id` we load the
     // existing thread; with `contact_id` we find-or-create one for the
@@ -133,7 +130,8 @@ export async function POST(request: Request) {
         supabase,
         accountId,
         userId,
-        contact_id
+        contact_id,
+        message_type === 'template'
       )
       if (!resolved) {
         return NextResponse.json(
@@ -151,41 +149,31 @@ export async function POST(request: Request) {
       )
     }
 
-    // Delegate to the shared send core (validates, sends to Meta with
-    // phone-variant retry, persists, pauses active flow runs). Its
-    // `SendMessageError` carries a machine code + HTTP status; the
-    // dashboard maps it to the internal `{ error }` shape.
-    try {
-      const result = await sendMessageToConversation(supabase, accountId, {
-        conversationId,
-        messageType: message_type,
-        contentText: content_text,
-        mediaUrl: media_url,
-        filename,
-        templateName: template_name,
-        templateLanguage: template_language,
-        templateParams: template_params,
-        templateMessageParams: template_message_params,
-        interactivePayload: interactive_payload,
-        replyToMessageId: reply_to_message_id,
-        senderId: userId,
-      })
+    const result = await sendMessageToConversation(supabase, accountId, {
+      conversationId,
+      messageType: message_type,
+      contentText: content_text,
+      mediaUrl: media_url,
+      filename,
+      templateName: template_name,
+      templateLanguage: template_language,
+      templateParams: template_params,
+      templateMessageParams: template_message_params,
+      interactivePayload: interactive_payload,
+      replyToMessageId: reply_to_message_id,
+      senderId: userId,
+      requestKey: request.headers.get('Idempotency-Key') ?? undefined,
+    })
 
-      return NextResponse.json({
-        success: true,
-        message_id: result.messageId,
-        whatsapp_message_id: result.whatsappMessageId,
-      })
-    } catch (err) {
-      if (err instanceof SendMessageError) {
-        return NextResponse.json(
-          { error: err.message },
-          { status: err.status }
-        )
-      }
-      throw err
-    }
+    return NextResponse.json({
+      success: true,
+      message_id: result.messageId,
+      whatsapp_message_id: result.whatsappMessageId,
+    })
   } catch (error) {
+    if (error instanceof SendMessageError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
     // requireRole throws Unauthorized/Forbidden; toErrorResponse maps
     // those to 401/403 and collapses anything else to a generic 500.
     console.error('Error in WhatsApp send POST:', error)
@@ -207,15 +195,20 @@ async function findOrCreateConversation(
   accountId: string,
   userId: string,
   contactId: string,
+  allowCreate: boolean,
 ): Promise<string | null> {
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('conversations')
     .select('id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
+  if (lookupError) return null
   if (existing) return existing.id
+  if (!allowCreate) throw replyWindowClosedError()
 
   const { data: created, error } = await supabase
     .from('conversations')

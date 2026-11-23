@@ -4,6 +4,7 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
+import { isManagedProvider } from '@/lib/ai/managed-providers'
 import { generateReply } from '@/lib/ai/generate'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
@@ -107,7 +108,15 @@ export async function POST(request: Request) {
       knowledge,
     })
 
-    const { text, usage } = await generateReply({ config, systemPrompt, messages })
+    const { text, usage, resolvedModel } = await generateReply({ config, systemPrompt, messages }).catch(async error => {
+      if (config.provider !== 'google_ai_studio' && isManagedProvider(config.provider)) {
+        await logAiUsage(supabaseAdmin(), {
+          accountId, conversationId, mode: 'draft', provider: config.provider, model: config.model, usage: null,
+          outcome: error instanceof AiError && error.code === 'rate_limited' ? 'rate_limited' : 'provider_error',
+        })
+      }
+      throw error
+    })
 
     // Record spend on the account's BYO key. Best-effort + via the
     // service role (the log has no `authenticated` INSERT policy). This
@@ -122,7 +131,7 @@ export async function POST(request: Request) {
         conversationId,
         mode: 'draft',
         provider: config.provider,
-        model: config.model,
+        model: resolvedModel ?? config.model,
         usage,
       })
     } catch (logErr) {

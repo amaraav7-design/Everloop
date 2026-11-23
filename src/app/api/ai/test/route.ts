@@ -3,10 +3,13 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
-import { AiError, type AiProvider } from '@/lib/ai/types'
+import { AiError, isAiProvider, type AiProvider } from '@/lib/ai/types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/lib/ai/providers/openai-compatible'
 import { canReuseStoredAiKey } from '@/lib/ai/stored-key'
 import { getT } from '@/lib/i18n/translate'
+
+import { isManagedProvider, validateManagedModel } from '@/lib/ai/managed-providers'
+import { decryptAiConnection, readAiConnection } from '@/lib/ai/provider-connections'
 
 const t = getT('Api')
 
@@ -31,8 +34,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: t('common.invalidRequestBody') }, { status: 400 })
     }
 
-    const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic' && provider !== 'openai_compatible') {
+    const provider: unknown = body.provider
+    if (!isAiProvider(provider)) {
       return NextResponse.json(
         { error: t('ai.providerInvalid') },
         { status: 400 },
@@ -47,8 +50,16 @@ export async function POST(request: Request) {
     let existing: { api_key: string; provider: AiProvider; base_url: string | null } | null = null
 
     const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
+    const managedProvider = isManagedProvider(provider) ? provider : null
+    const freeOnly = provider === 'google_ai_studio' || body.free_only !== false
+    if (rawKey.length > 4096) return NextResponse.json({ error: t('ai.enterApiKey') }, { status: 400 })
+    if (managedProvider) validateManagedModel(managedProvider, model, freeOnly)
     let apiKeyPlain = rawKey
-    if (!apiKeyPlain || provider === 'openai_compatible') {
+    if (managedProvider && !apiKeyPlain) {
+      const connection = await readAiConnection(accountId, managedProvider)
+      if (connection) apiKeyPlain = decryptAiConnection(connection.api_key)
+    }
+    if (!managedProvider && (!apiKeyPlain || provider === 'openai_compatible')) {
       const { data } = await supabase
         .from('ai_configs')
         .select('api_key, provider, base_url')
@@ -94,6 +105,7 @@ export async function POST(request: Request) {
         provider,
         model,
         apiKey: apiKeyPlain,
+        ...(managedProvider ? { freeOnly } : {}),
         baseUrl,
         systemPrompt: null,
         isActive: true,
@@ -118,6 +130,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true })
   } catch (err) {
+    if (err instanceof AiError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status })
     return toErrorResponse(err)
   }
 }

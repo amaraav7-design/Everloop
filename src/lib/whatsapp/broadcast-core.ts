@@ -18,7 +18,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
+import { sendEligibleTemplate } from '@/lib/whatsapp/template-delivery';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import {
   parseInternationalPhone,
@@ -62,6 +62,7 @@ interface PlannedRecipient {
 }
 
 export interface BroadcastPlan {
+  accountId: string;
   broadcastId: string;
   templateName: string;
   templateLanguage: string;
@@ -235,6 +236,7 @@ export async function createBroadcast(
 
   return {
     broadcastId,
+    accountId,
     templateName,
     templateLanguage: resolvedTemplate.language,
     phoneNumberId: config.phone_number_id,
@@ -269,7 +271,7 @@ export async function deliverBroadcast(
 
     for (const variant of variants) {
       try {
-        const result = await sendTemplateMessage({
+        const result = await sendEligibleTemplate(db, plan.accountId, {
           phoneNumberId: plan.phoneNumberId,
           accessToken: plan.accessToken,
           to: variant,

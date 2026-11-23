@@ -14,6 +14,7 @@
  */
 
 export const THEME_IDS = [
+  "evergreen",
   "violet",
   "emerald",
   "cobalt",
@@ -23,7 +24,7 @@ export const THEME_IDS = [
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME: ThemeId = "violet";
+export const DEFAULT_THEME: ThemeId = "evergreen";
 
 export const STORAGE_KEY = "wacrm.theme";
 
@@ -67,10 +68,11 @@ export interface ThemeMeta {
 }
 
 export const THEMES: ReadonlyArray<ThemeMeta> = [
+  { id: "evergreen", name: "Evergreen", tagline: "Everloop’s default color theme.", swatch: "#c5ed8b" },
   {
     id: "violet",
     name: "Violet",
-    tagline: "The default — confident, slightly playful.",
+    tagline: "A bright violet accent.",
     swatch: "oklch(0.526 0.247 293)",
   },
   {

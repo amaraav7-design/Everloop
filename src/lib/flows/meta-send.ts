@@ -14,7 +14,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
-import { assertConversationInAccount } from '@/lib/whatsapp/conversation-scope'
+import { assertConversationSendAllowed } from '@/lib/whatsapp/conversation-scope'
 import { supabaseAdmin } from './admin-client'
 import { getT } from '@/lib/i18n/translate'
 
@@ -106,7 +106,7 @@ export async function engineSendText(
 
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
-  await assertConversationInAccount(db, args.conversationId, args.accountId)
+  await assertConversationSendAllowed(db, args, 'free_form')
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).
@@ -220,7 +220,7 @@ export async function engineSendMedia(
 
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
-  await assertConversationInAccount(db, args.conversationId, args.accountId)
+  await assertConversationSendAllowed(db, args, 'free_form')
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).
@@ -376,7 +376,7 @@ async function sendInteractiveViaMeta(
 
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
-  await assertConversationInAccount(db, input.conversationId, input.accountId)
+  await assertConversationSendAllowed(db, input, 'free_form')
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).

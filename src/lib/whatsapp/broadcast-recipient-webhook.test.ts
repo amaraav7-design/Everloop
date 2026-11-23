@@ -82,7 +82,7 @@ describe('applyBroadcastRecipientStatus', () => {
     ]);
     await expect(applyBroadcastRecipientStatus(db, event('read'))).resolves.toBe('updated');
     expect(updates[0].filters).toEqual({ whatsapp_message_id: 'wamid.1' });
-    expect(updates[0].allowed).toEqual(['pending', 'sent', 'delivered']);
+    expect(updates[0].allowed).toEqual(['pending', 'sent', 'delivered', 'replied']);
     expect(updates[0].patch).toEqual({ status: 'read', read_at: '2026-10-16T11:00:00.000Z' });
   });
 
@@ -142,39 +142,12 @@ describe('isReplyAttributable', () => {
 });
 
 describe('flagBroadcastReply', () => {
-  it('looks up only the most recent recipient row for the contact in the account', async () => {
-    const { db, latestQuery } = makeDb([{ id: 'r1', status: 'read', sent_at: hoursAgo(1) }]);
-    await expect(flagBroadcastReply(db, 'acc-1', 'contact-1', NOW)).resolves.toBe('updated');
-    expect(latestQuery).toMatchObject({
-      contact_id: 'contact-1',
-      'broadcasts.account_id': 'acc-1',
-      order: ['created_at', false],
+  it('passes signed reply context and account scope to the attribution function', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const db = { rpc } as unknown as SupabaseClient;
+    await expect(flagBroadcastReply(db, 'account', 'contact', NOW, 'wamid.original')).resolves.toBe('updated');
+    expect(rpc).toHaveBeenCalledWith('record_campaign_reply', {
+      p_account: 'account', p_contact: 'contact', p_at: NOW.toISOString(), p_context: 'wamid.original',
     });
-  });
-
-  it('does not walk back to an older broadcast on a second inbound message', async () => {
-    const rows = [
-      { id: 'newest', status: 'read', sent_at: hoursAgo(1) },
-      { id: 'older', status: 'read', sent_at: hoursAgo(30) },
-    ];
-    const { db } = makeDb(rows);
-    await flagBroadcastReply(db, 'acc-1', 'contact-1', NOW);
-    await expect(flagBroadcastReply(db, 'acc-1', 'contact-1', NOW)).resolves.toBe('skipped');
-    expect(rows.map((r) => r.status)).toEqual(['replied', 'read']);
-  });
-
-  it('ignores a reply to a broadcast sent outside the window', async () => {
-    const rows = [{ id: 'r1', status: 'delivered', sent_at: hoursAgo(24 * 8) }];
-    const { db, updates } = makeDb(rows);
-    await expect(flagBroadcastReply(db, 'acc-1', 'contact-1', NOW)).resolves.toBe('skipped');
-    expect(updates).toHaveLength(0);
-  });
-
-  it('guards the update so a concurrent reply cannot flag it twice', async () => {
-    const { db, updates } = makeDb([{ id: 'r1', status: 'sent', sent_at: hoursAgo(1) }]);
-    await flagBroadcastReply(db, 'acc-1', 'contact-1', NOW);
-    expect(updates[0].filters).toEqual({ id: 'r1' });
-    expect(updates[0].allowed).not.toContain('replied');
-    expect(updates[0].patch).toEqual({ status: 'replied', replied_at: NOW.toISOString() });
   });
 });

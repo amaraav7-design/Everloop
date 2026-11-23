@@ -51,3 +51,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build MCP server
+        working-directory: mcp-server
+        run: |
+          npm ci
+          npm run build

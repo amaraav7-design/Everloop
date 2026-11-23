@@ -11,6 +11,7 @@ export interface LogAiUsageArgs {
   model: string
   /** Provider usage; a no-op when null (nothing worth recording). */
   usage: AiUsage | null
+  outcome?: 'rate_limited' | 'provider_error'
 }
 
 /**
@@ -30,7 +31,7 @@ export async function logAiUsage(
   db: SupabaseClient,
   args: LogAiUsageArgs,
 ): Promise<void> {
-  if (!args.usage) return
+  if (!args.usage && !args.outcome) return
   try {
     const { error } = await db.from('ai_usage_log').insert({
       account_id: args.accountId,
@@ -38,9 +39,10 @@ export async function logAiUsage(
       mode: args.mode,
       provider: args.provider,
       model: args.model,
-      prompt_tokens: args.usage.promptTokens,
-      completion_tokens: args.usage.completionTokens,
-      total_tokens: args.usage.totalTokens,
+      ...(args.outcome ? { outcome: args.outcome } : {}),
+      prompt_tokens: args.usage?.promptTokens ?? 0,
+      completion_tokens: args.usage?.completionTokens ?? 0,
+      total_tokens: args.usage?.totalTokens ?? 0,
     })
     if (error) {
       console.error('[ai usage] log insert failed:', error)

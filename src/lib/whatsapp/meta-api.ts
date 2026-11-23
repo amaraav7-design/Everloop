@@ -16,6 +16,7 @@ const ti = getT('Validation.interactive')
 
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
+const MESSAGE_SEND_TIMEOUT_MS = 20_000
 
 export interface MetaSendResult {
   messageId: string
@@ -135,6 +136,7 @@ export async function verifyPhoneNumber(
   const { phoneNumberId, accessToken } = args
   const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating`
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(8000),
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!response.ok) {
@@ -385,6 +387,7 @@ export interface SendTextMessageArgs {
   /** Meta's message_id of the message being replied to. Adds a `context` field
    *  so WhatsApp renders the new message as a reply with a quote preview. */
   contextMessageId?: string
+  callbackData?: string
 }
 
 /**
@@ -394,7 +397,7 @@ export interface SendTextMessageArgs {
 export async function sendTextMessage(
   args: SendTextMessageArgs
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, text, contextMessageId } = args
+  const { phoneNumberId, accessToken, to, text, contextMessageId, callbackData } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
@@ -402,11 +405,13 @@ export async function sendTextMessage(
     type: 'text',
     text: { body: text },
   }
+  if (callbackData) body.biz_opaque_callback_data = callbackData
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }
   }
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(MESSAGE_SEND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -434,6 +439,7 @@ export interface SendMediaMessageArgs {
   /** Document-only. Shown in the recipient's chat as the file name. Ignored for image/video/audio. */
   filename?: string
   contextMessageId?: string
+  callbackData?: string
 }
 
 /**
@@ -451,7 +457,7 @@ export interface SendMediaMessageArgs {
 export async function sendMediaMessage(
   args: SendMediaMessageArgs,
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, kind, link, caption, filename, contextMessageId } = args
+  const { phoneNumberId, accessToken, to, kind, link, caption, filename, contextMessageId, callbackData } = args
   if (!link) throw new Error('sendMediaMessage requires a link.')
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
@@ -468,10 +474,12 @@ export async function sendMediaMessage(
     type: kind,
     [kind]: media,
   }
+  if (callbackData) body.biz_opaque_callback_data = callbackData
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(MESSAGE_SEND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -520,6 +528,7 @@ export interface SendTemplateMessageArgs {
   messageParams?: SendTimeParams
   /** Meta's message_id of the message being replied to. */
   contextMessageId?: string
+  callbackData?: string
 }
 
 /**
@@ -546,6 +555,7 @@ export async function sendTemplateMessage(
     template,
     messageParams,
     contextMessageId,
+    callbackData,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
@@ -582,6 +592,7 @@ export async function sendTemplateMessage(
     ...recipientFields(to),
     type: 'template',
     template: templatePayload,
+    ...(callbackData ? { biz_opaque_callback_data: callbackData } : {}),
   }
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }
@@ -589,6 +600,7 @@ export async function sendTemplateMessage(
 
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(MESSAGE_SEND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -960,6 +972,7 @@ export interface SendInteractiveButtonsArgs {
   buttons: InteractiveButton[]
   /** Meta's message_id of the message being replied to (quote preview). */
   contextMessageId?: string
+  callbackData?: string
 }
 
 /**
@@ -975,7 +988,7 @@ export async function sendInteractiveButtons(
 ): Promise<MetaSendResult> {
   const {
     phoneNumberId, accessToken, to,
-    bodyText, headerText, footerText, buttons, contextMessageId,
+    bodyText, headerText, footerText, buttons, contextMessageId, callbackData,
   } = args
   validateInteractiveBody(bodyText)
   validateInteractiveHeaderFooter(headerText, footerText)
@@ -1021,11 +1034,13 @@ export async function sendInteractiveButtons(
     type: 'interactive',
     interactive,
   }
+  if (callbackData) body.biz_opaque_callback_data = callbackData
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(MESSAGE_SEND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -1069,6 +1084,7 @@ export interface SendInteractiveListArgs {
    */
   sections: InteractiveListSection[]
   contextMessageId?: string
+  callbackData?: string
 }
 
 /**
@@ -1082,7 +1098,7 @@ export async function sendInteractiveList(
 ): Promise<MetaSendResult> {
   const {
     phoneNumberId, accessToken, to,
-    bodyText, buttonLabel, headerText, footerText, sections, contextMessageId,
+    bodyText, buttonLabel, headerText, footerText, sections, contextMessageId, callbackData,
   } = args
   validateInteractiveBody(bodyText)
   validateInteractiveHeaderFooter(headerText, footerText)
@@ -1152,11 +1168,13 @@ export async function sendInteractiveList(
     type: 'interactive',
     interactive,
   }
+  if (callbackData) body.biz_opaque_callback_data = callbackData
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(MESSAGE_SEND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,

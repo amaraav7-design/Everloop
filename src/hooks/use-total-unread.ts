@@ -1,74 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Conversation } from "@/types";
+import { useAuth } from "@/hooks/use-auth";
 
-/**
- * Count of conversations with at least one unread inbound message for
- * the current user. Used by the sidebar to surface a green dot on the
- * Inbox nav entry when the user is elsewhere in the app.
- *
- * Lives on its own realtime channel (distinct from the inbox page's
- * "inbox-realtime") so both can coexist without sharing state.
- */
 export function useTotalUnread(): number {
-  const [total, setTotal] = useState(0);
-
-  // Keep a live local mirror of {id: unread_count} so INSERT/UPDATE/DELETE
-  // events can adjust the total in O(1) without refetching.
-  const countsRef = useRef<Map<string, number>>(new Map());
+  const { accountId } = useAuth();
+  const [count, setCount] = useState<{ accountId: string; total: number } | null>(null);
 
   useEffect(() => {
+    if (!accountId) return;
     const supabase = createClient();
-    let cancelled = false;
+    let timer: number | undefined;
+    let controller: AbortController | null = null;
 
-    // Initial load. RLS scopes this to the signed-in user automatically —
-    // no explicit user_id filter needed here.
-    (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select("id, unread_count");
-      if (cancelled || error || !data) return;
-
-      const map = new Map<string, number>();
-      let sum = 0;
-      for (const row of data as { id: string; unread_count: number }[]) {
-        const n = row.unread_count ?? 0;
-        map.set(row.id, n);
-        if (n > 0) sum += 1;
-      }
-      countsRef.current = map;
-      setTotal(sum);
-    })();
-
-    const channel = supabase
-      .channel("total-unread-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
-        (payload) => {
-          const map = countsRef.current;
-          if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as Partial<Conversation>;
-            if (oldRow.id) map.delete(oldRow.id);
-          } else {
-            const row = payload.new as Conversation;
-            map.set(row.id, row.unread_count ?? 0);
-          }
-          // Recompute — cheap, conversations per user stay small.
-          let sum = 0;
-          for (const n of map.values()) if (n > 0) sum += 1;
-          setTotal(sum);
-        },
-      )
-      .subscribe();
-
+    async function refresh() {
+      controller?.abort();
+      const request = new AbortController();
+      controller = request;
+      const { count: total, error } = await supabase.from("conversations")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", accountId).gt("unread_count", 0).abortSignal(request.signal);
+      if (!request.signal.aborted && !error) setCount({ accountId: accountId!, total: total ?? 0 });
+    }
+    function schedule() {
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 300);
+    }
+    void refresh();
+    const channel = supabase.channel("total-unread-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations", filter: `account_id=eq.${accountId}` }, schedule)
+      .subscribe(status => { if (status === "SUBSCRIBED") schedule(); });
+    window.addEventListener("focus", schedule);
     return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
+      if (timer !== undefined) window.clearTimeout(timer);
+      controller?.abort();
+      window.removeEventListener("focus", schedule);
+      void supabase.removeChannel(channel);
     };
-  }, []);
-
-  return total;
+  }, [accountId]);
+  return count?.accountId === accountId ? count.total : 0;
 }

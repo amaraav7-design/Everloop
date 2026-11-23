@@ -14,6 +14,8 @@ vi.mock('./admin-client', () => ({
     from(table: string) {
       const builder: Record<string, unknown> = {
         select: () => builder,
+        order: () => builder,
+        limit: () => builder,
         eq: () => builder,
         update: () => builder,
         insert: (row: Record<string, unknown>) => {
@@ -21,6 +23,7 @@ vi.mock('./admin-client', () => ({
           return builder
         },
         maybeSingle: async () => {
+          if (table === 'whatsapp_marketing_consent_events') return { data: { state: 'opted_in' }, error: null }
           if (table === 'contacts') {
             return { data: { id: 'ct-1', phone: '15551234567', wa_user_id: null }, error: null }
           }
@@ -44,7 +47,7 @@ vi.mock('./admin-client', () => ({
   }),
 }))
 
-import { engineSendTemplate } from './meta-send'
+import { engineSendTemplate, engineSendText } from './meta-send'
 
 type FetchResult = { ok: boolean; json: () => Promise<unknown> }
 
@@ -66,6 +69,7 @@ const BASE_ROW = {
   user_id: 'u-1',
   name: 'order_update',
   category: 'Utility',
+  status: 'APPROVED',
   language: 'en_US',
   body_text: 'Your order {{1}} ships on {{2}}',
   created_at: '2026-01-01T00:00:00Z',
@@ -92,7 +96,14 @@ const BODY_COMPONENT = {
 beforeEach(() => {
   state.templateRows = []
   state.insertedMessage = null
+  fetchMock.mockClear()
   vi.stubGlobal('fetch', fetchMock)
+})
+
+it('fails before Meta dispatch when an automation sends text without customer inbound', async () => {
+  await expect(engineSendText({ ...SEND_ARGS, text: 'Hello' })).rejects.toThrow('24-hour reply window')
+  expect(fetchMock).not.toHaveBeenCalled()
+  expect(state.insertedMessage).toBeNull()
 })
 
 afterEach(() => {

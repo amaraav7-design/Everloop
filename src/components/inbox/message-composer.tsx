@@ -324,6 +324,7 @@ export function MessageComposer({
   );
 
   const sendInteractive = useCallback(() => {
+    if (inputsDisabled) return;
     const result = validateInteractivePayload(interactivePayload);
     if (!result.ok) {
       toast.error(result.error);
@@ -332,7 +333,7 @@ export function MessageComposer({
     onSendInteractive(interactivePayload, replyTo?.id);
     setInteractiveOpen(false);
     onClearReply?.();
-  }, [interactivePayload, onSendInteractive, replyTo?.id, onClearReply]);
+  }, [inputsDisabled, interactivePayload, onSendInteractive, replyTo?.id, onClearReply]);
 
   // Persist the current builder payload as a reusable interactive snippet.
   const saveAsQuickReply = useCallback(async () => {
@@ -520,7 +521,7 @@ export function MessageComposer({
   // ---- Draft send / discard -----------------------------------------
 
   const sendDraft = useCallback(() => {
-    if (!draft || busy) return;
+    if (!draft || busy || inputsDisabled) return;
     onSendMedia({
       kind: draft.kind,
       mediaUrl: draft.mediaUrl,
@@ -535,7 +536,7 @@ export function MessageComposer({
     // The object is now owned by the sent message — clear without GC.
     setDraft(null);
     onClearReply?.();
-  }, [draft, busy, onSendMedia, replyTo?.id, onClearReply]);
+  }, [draft, busy, inputsDisabled, onSendMedia, replyTo?.id, onClearReply]);
 
   // Discard GCs the staged object — it was uploaded but never sent.
   const discardDraft = useCallback(() => {
@@ -561,19 +562,21 @@ export function MessageComposer({
         </div>
       )}
       {sessionExpired && (
-        <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
-          <p className="text-xs text-amber-400">
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2">
+          <p className="text-xs text-foreground" role="status">
             {t("sessionExpiredHint")}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-amber-400 hover:text-amber-300"
-            onClick={onOpenTemplates}
-          >
-            <LayoutTemplate className="mr-1 h-3 w-3" />
-            {t("templates")}
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 shrink-0 sm:h-8"
+              onClick={onOpenTemplates}
+            >
+              <LayoutTemplate className="mr-1 h-3 w-3" />
+              {t("templates")}
+            </Button>
+          )}
         </div>
       )}
 
@@ -612,7 +615,7 @@ export function MessageComposer({
       {draft ? (
         <MediaDraftPreview
           draft={draft}
-          busy={busy}
+          sendDisabled={busy || sessionExpired}
           readOnly={readOnly}
           onCaptionChange={setCaption}
           onDiscard={discardDraft}
@@ -636,7 +639,8 @@ export function MessageComposer({
           <Button
             size="sm"
             onClick={stopRecording}
-            className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90"
+            className="size-11 shrink-0 bg-primary p-0 hover:bg-primary/90 sm:size-9"
+            aria-label={t("stopAndAttach")}
             title={t("stopAndAttach")}
           >
             <Square className="h-4 w-4" />
@@ -652,6 +656,7 @@ export function MessageComposer({
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={inputsDisabled || busy}
+              aria-label={t("attachMedia")}
               title={
                 readOnly
                   ? t("readOnlyTitle")
@@ -659,7 +664,7 @@ export function MessageComposer({
                     ? undefined
                     : t("attachMedia")
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:size-9"
             >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -692,6 +697,7 @@ export function MessageComposer({
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={inputsDisabled}
+              aria-label={t("moreActions")}
               title={
                 readOnly
                   ? t("readOnlyTitle")
@@ -699,7 +705,7 @@ export function MessageComposer({
                     ? undefined
                     : t("moreActions")
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:size-9"
             >
               <Plus className="h-4 w-4" />
             </DropdownMenuTrigger>
@@ -715,26 +721,30 @@ export function MessageComposer({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <GatedButton
-            variant="ghost"
-            size="sm"
-            canAct={!readOnly}
-            gateReason={tGate("reasons.sendMessages")}
-            title={readOnly ? undefined : t("sendTemplate")}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onOpenTemplates}
-          >
-            <LayoutTemplate className="h-4 w-4" />
-          </GatedButton>
+          {!sessionExpired && (
+            <GatedButton
+              variant="ghost"
+              size="sm"
+              canAct={!readOnly}
+              gateReason={tGate("reasons.sendMessages")}
+              aria-label={t("sendTemplate")}
+              title={readOnly ? undefined : t("sendTemplate")}
+              className="size-11 shrink-0 p-0 text-muted-foreground hover:text-foreground sm:size-9"
+              onClick={onOpenTemplates}
+            >
+              <LayoutTemplate className="h-4 w-4" />
+            </GatedButton>
+          )}
 
           <GatedButton
             variant="ghost"
             size="sm"
             canAct={!readOnly}
             gateReason={tGate("reasons.sendMessages")}
-            disabled={drafting}
+            disabled={drafting || sessionExpired}
+            aria-label={t("draftWithAI")}
             title={readOnly ? undefined : t("draftWithAI")}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary"
+            className="size-11 shrink-0 p-0 text-muted-foreground hover:text-primary sm:size-9"
             onClick={handleDraft}
           >
             {drafting ? (
@@ -764,7 +774,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "order-1 min-w-0 flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 sm:order-2",
+              "order-1 min-w-0 flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-base text-foreground placeholder-muted-foreground sm:text-sm outline-none transition-colors focus:border-primary/50 sm:order-2",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
             )}
           />
@@ -774,8 +784,10 @@ export function MessageComposer({
             canAct={!readOnly}
             gateReason={tGate("reasons.sendMessages")}
             disabled={!text.trim() || sessionExpired || sending}
+            aria-label={t("send")}
             onClick={handleSend}
-            className="order-1 h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:order-3"
+            wrapperClassName="order-1 shrink-0 sm:order-3"
+            className="size-11 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:size-9"
           >
             <Send className="h-4 w-4" />
           </GatedButton>
@@ -785,7 +797,7 @@ export function MessageComposer({
       {/* Hint sits outside the flex row so its height doesn't push
           `items-end` buttons below the textarea. Indented to line up
           under the textarea left edge. */}
-      {!draft && !recording && (
+      {!draft && !recording && !inputsDisabled && (
         <p className="mt-1 pl-1 text-[10px] text-muted-foreground sm:pl-[5.5rem]">
           {t("draftHint")}
         </p>
@@ -816,7 +828,7 @@ export function MessageComposer({
               )}
               {t("saveAsQuickReply")}
             </Button>
-            <Button onClick={sendInteractive}>
+            <Button disabled={inputsDisabled} onClick={sendInteractive}>
               <Send className="mr-1 h-4 w-4" />
               {t("send")}
             </Button>
@@ -842,7 +854,7 @@ export function MessageComposer({
  */
 function MediaDraftPreview({
   draft,
-  busy,
+  sendDisabled,
   readOnly,
   onCaptionChange,
   onDiscard,
@@ -850,7 +862,7 @@ function MediaDraftPreview({
   t,
 }: {
   draft: MediaDraft;
-  busy: boolean;
+  sendDisabled: boolean;
   readOnly: boolean;
   onCaptionChange: (caption: string) => void;
   onDiscard: () => void;
@@ -906,14 +918,15 @@ function MediaDraftPreview({
               }
             }}
             placeholder={t("addCaption")}
-            className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50"
+            className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-base text-foreground placeholder-muted-foreground sm:text-sm outline-none transition-colors focus:border-primary/50"
           />
         )}
         <GatedButton
           size="sm"
           canAct={!readOnly}
           gateReason={tGate("reasons.sendMessages")}
-          disabled={busy}
+          disabled={sendDisabled}
+          aria-label={t("send")}
           onClick={onSend}
           className={cn(
             "h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40",

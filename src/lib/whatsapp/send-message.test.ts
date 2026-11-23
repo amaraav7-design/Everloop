@@ -176,6 +176,12 @@ vi.mock('@/lib/whatsapp/meta-api', async (importOriginal) => ({
   sendInteractiveList: vi.fn(async () => ({ messageId: 'wamid.list' })),
 }));
 
+vi.mock('@/lib/whatsapp/outbound-attempts', async (original) => ({
+  ...(await original<typeof import('@/lib/whatsapp/outbound-attempts')>()),
+  reserveSendAttempt: vi.fn(async () => ({ key: 'test-attempt', previous: null })),
+  settleSendAttempt: vi.fn(),
+}))
+
 vi.mock('@/lib/whatsapp/encryption', () => ({
   decrypt: (v: string) => v,
   encrypt: (v: string) => v,
@@ -212,11 +218,13 @@ interface CapturedWrites {
 function sendPathDb(
   templateRows: unknown[],
   captured: CapturedWrites,
-  contact: Record<string, unknown> = { id: 'ct-1', phone: '+15551234567' }
+  contact: Record<string, unknown> = { id: 'ct-1', phone: '+15551234567' },
+  lastInboundAt: string | null = new Date(Date.now() - 60_000).toISOString(),
 ): SupabaseClient {
   const conversation = {
     id: 'cv-1',
     contact,
+    last_inbound_at: lastInboundAt,
   };
   const config = {
     id: 'cfg-1',
@@ -228,6 +236,8 @@ function sendPathDb(
     from(table: string) {
       const builder: Record<string, unknown> = {
         select: () => builder,
+        order: () => builder,
+        limit: () => builder,
         eq: () => builder,
         insert: (row: Record<string, unknown>) => {
           if (table === 'messages') captured.message = row;
@@ -237,7 +247,7 @@ function sendPathDb(
           if (table === 'conversations') captured.conversation = row;
           return builder;
         },
-        maybeSingle: async () => ({ data: null, error: null }),
+        maybeSingle: async () => ({ data: table === 'whatsapp_marketing_consent_events' ? { state: 'opted_in' } : null, error: null }),
         single: async () => {
           if (table === 'conversations') {
             return { data: conversation, error: null };
@@ -265,6 +275,7 @@ const TEMPLATE_ROW = {
   user_id: 'u-1',
   name: 'order_update',
   category: 'Utility',
+  status: 'APPROVED',
   language: 'en',
   body_text: 'Your order {{1}} ships on {{2}}',
   created_at: '2026-01-01T00:00:00Z',
@@ -425,6 +436,30 @@ describe('sendMessageToConversation — template persistence (#483)', () => {
 // ============================================================
 
 const BSUID = 'US.13491208655302741918';
+
+describe('sendMessageToConversation — reply window', () => {
+  it.each([null, '2026-01-01T00:00:00Z'])('rejects a closed window (%s) before calling Meta', async (lastInboundAt) => {
+    const { sendTextMessage } = await import('@/lib/whatsapp/meta-api');
+    vi.mocked(sendTextMessage).mockClear();
+    const captured: CapturedWrites = {};
+
+    await expect(sendMessageToConversation(sendPathDb([], captured, undefined, lastInboundAt), 'acct-1', {
+      conversationId: 'cv-1', messageType: 'text', contentText: 'Hello',
+    })).rejects.toMatchObject({ code: 'reply_window_closed', status: 409 });
+
+    expect(sendTextMessage).not.toHaveBeenCalled();
+    expect(captured.message).toBeUndefined();
+  });
+
+  it('still sends templates before the first customer message', async () => {
+    const captured: CapturedWrites = {};
+    await sendMessageToConversation(sendPathDb([TEMPLATE_ROW], captured, undefined, null), 'acct-1', {
+      conversationId: 'cv-1', messageType: 'template', templateName: 'order_update',
+      templateParams: ['A123', 'Friday'],
+    });
+    expect(captured.message).toMatchObject({ content_type: 'template' });
+  });
+});
 
 describe('sendMessageToConversation — BSUID recipients (#519)', () => {
   it('sends to the BSUID when the contact has no phone number', async () => {

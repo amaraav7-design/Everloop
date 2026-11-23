@@ -2,11 +2,10 @@
 
 import Image from "next/image";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CONVERSATION_SELECT,
   matchesContactFilters,
-  normalizeConversations,
 } from "@/lib/inbox/conversations";
 import { applyInboxFilter, type InboxFilter } from "@/lib/inbox/inbox-filters";
 import { cn } from "@/lib/utils";
@@ -55,6 +54,14 @@ export function ConversationList({
   initialFilter = "all",
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
+  const { accountId } = useAuth();
+  const [requestError, setRequestError] = useState(false);
+  const [requestId, setRequestId] = useState(0);
+  const [page, setPage] = useState<{ at: string; id: string } | null>(null);
+  const [companyOptions, setCompanyOptions] = useState<string[]>([]);
+  const requestRef = useRef<AbortController | null>(null);
+  const loadedRef = useRef(conversations);
+  useEffect(() => { loadedRef.current = conversations; }, [conversations]);
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
@@ -100,67 +107,65 @@ export function ConversationList({
     onConversationsLoadedRef.current = onConversationsLoaded;
   });
 
-  useEffect(() => {
-    const supabase = createClient();
-    let cancelled = false;
-
-    (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
-
-      if (cancelled) return;
-
-      if (error) {
-        // Supabase errors have non-enumerable properties — log fields explicitly
-        console.error("Failed to fetch conversations:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        setLoading(false);
-        return;
+  const load = useCallback(async (cursor: { at: string; id: string } | null) => {
+    if (!accountId) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setLoading(true);
+    setRequestError(false);
+    try {
+      const db = createClient();
+      const { data, error } = await db.rpc('inbox_conversation_page', {
+        p_account: accountId, p_filter: filter, p_search: search.trim(),
+        p_tags: selectedTagIds, p_company: selectedCompany,
+        p_cursor_at: cursor?.at ?? null, p_cursor_id: cursor?.id ?? null,
+      }).abortSignal(controller.signal);
+      if (controller.signal.aborted) return;
+      if (error) throw error;
+      const rows = (data ?? []) as { conversation: Conversation; cursor_at: string }[];
+      const visible = rows.slice(0, 50);
+      const last = visible.at(-1);
+      setPage(rows.length > 50 && last ? { at: last.cursor_at, id: last.conversation.id } : null);
+      const items = visible.map(row => row.conversation);
+      if (cursor) {
+        const merged = new Map(loadedRef.current.map(item => [item.id, item]));
+        for (const item of items) merged.set(item.id, item);
+        onConversationsLoadedRef.current([...merged.values()]);
+      } else {
+        onConversationsLoadedRef.current(items);
       }
-
-      onConversationsLoadedRef.current(normalizeConversations(data ?? []));
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // `resyncToken` is included so the parent can force a refetch when
-    // the realtime channel reconnects or the tab regains focus — catches
-    // up on any events sent while the WS was disconnected or throttled.
-  }, [resyncToken]);
-
-  // Tag definitions for the filter picker — loaded once so labels/colours
-  // stay stable regardless of which conversations happen to be loaded.
-  useEffect(() => {
-    const supabase = createClient();
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.from("tags").select("*").order("name");
-      if (!cancelled && data) setTags(data as Tag[]);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Company options are derived from the loaded conversations — there's no
-  // separate companies table, and only companies with a live conversation
-  // are worth offering as an inbox filter.
-  const companies = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of conversations) {
-      const co = c.contact?.company?.trim();
-      if (co) set.add(co);
+    } catch {
+      if (!controller.signal.aborted) setRequestError(true);
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [conversations]);
+  }, [accountId, filter, search, selectedTagIds, selectedCompany]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(null); }, search.trim() ? 220 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      requestRef.current?.abort();
+    };
+  }, [load, search, requestId, resyncToken]);
+
+  useEffect(() => {
+    if (!accountId) return;
+    const controller = new AbortController();
+    const db = createClient();
+    void Promise.all([
+      db.from('tags').select('*').eq('account_id', accountId).order('name').abortSignal(controller.signal),
+      db.rpc('inbox_companies', { p_account: accountId }).abortSignal(controller.signal),
+    ]).then(([tagResult, companies]) => {
+      if (controller.signal.aborted) return;
+      if (tagResult.data) setTags(tagResult.data as Tag[]);
+      if (companies.data) setCompanyOptions((companies.data as { company: string }[]).map(row => row.company));
+    });
+    return () => controller.abort();
+  }, [accountId]);
+
+  const companies = companyOptions;
 
   const tagsById = useMemo(() => {
     const m = new Map<string, Tag>();
@@ -401,7 +406,14 @@ export function ConversationList({
           space — the list then overflows and gets clipped by the
           parent's overflow-hidden with no scrollbar (issue #229). */}
       <ScrollArea className="min-h-0 flex-1">
-        {loading ? (
+        {requestError ? (
+          <div className="space-y-3 px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">{t('pageError')}</p>
+            <button type="button" className="min-h-11 text-sm font-medium text-primary" onClick={() => setRequestId(value => value + 1)}>
+              {t('retryPage')}
+            </button>
+          </div>
+        ) : loading && !conversations.length ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
@@ -421,6 +433,12 @@ export function ConversationList({
               />
             ))}
           </div>
+        )}
+        {page && !requestError && (
+          <button type="button" onClick={() => load(page)} disabled={loading}
+            className="min-h-11 w-full border-t border-border px-4 text-sm font-medium text-primary disabled:opacity-50">
+            {t('loadMore')}
+          </button>
         )}
       </ScrollArea>
     </div>

@@ -8,10 +8,18 @@ is included.
 
 ## Quick start
 
-1. Copy the env template and fill it in:
+1. Create an ignored `.env.local` and fill in the settings for your
+   Supabase project and host. The [rollout guide](everloop-deployment.md#rollout-and-pilot)
+   lists the campaign worker, AI pilot, and optional mobile notification settings.
 
-   ```bash
-   cp .env.local.example .env.local
+   ```dotenv
+   NEXT_PUBLIC_SUPABASE_URL=
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=
+   NEXT_PUBLIC_SITE_URL=
+   SUPABASE_SERVICE_ROLE_KEY=""
+   ENCRYPTION_KEY=
+   META_APP_SECRET=
+   WHATSAPP_VERIFY_TOKEN=
    ```
 
 2. Build and start (the `--env-file` flag is required — Compose only
@@ -72,5 +80,13 @@ docker run -d --env-file .env.local -e PORT=3000 -p 3000:3000 wacrm
   Wait steps or flows, point an external scheduler at
   `GET /api/automations/cron` and `GET /api/flows/cron` on this
   deployment, sending the shared secret in the `x-cron-secret` header
-  (`AUTOMATION_CRON_SECRET`, see `.env.local.example`). Both return
+  (`AUTOMATION_CRON_SECRET`). Both return
   503 until that variable is set.
+- Apply Supabase migrations through 062 before deploying the consent and
+  webhook changes. Set `WHATSAPP_WORKER_CRON_SECRET` in the server
+  environment. Schedule `GET /api/whatsapp/webhook/drain` every minute,
+  sending that secret in the `x-cron-secret` header. The webhook stores
+  verified receipts before acknowledging Meta. The drain retries failed
+  processing and prunes completed or exhausted receipts after 14 days.
+  Review incomplete inbound dispatches and uncertain outbound attempts
+  before resending, since a provider may already have accepted the message.

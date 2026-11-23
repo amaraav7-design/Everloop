@@ -28,7 +28,8 @@ import {
   PanelRightOpen,
   PanelRightClose,
 } from "lucide-react";
-import { format, isToday, isYesterday, differenceInHours } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
+import { replyWindowExpiresAt } from "@/lib/whatsapp/reply-window";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -125,6 +126,7 @@ interface MessageThreadProps {
    */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  onShowMobileContact?: () => void;
 }
 
 function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
@@ -184,9 +186,11 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  onShowMobileContact,
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
+  const tSend = useTranslations("LibErrors.send");
   const tQuote = useTranslations("Inbox.replyQuote");
 
   const { user } = useAuth();
@@ -287,32 +291,20 @@ export function MessageThread({
     };
   }, []);
 
-  // 24-hour session timer
-  const sessionInfo = useMemo(() => {
-    if (!messages.length) return { expired: false, remaining: "" };
-
-    // Find last customer message
-    const lastCustomerMsg = [...messages]
-      .reverse()
-      .find((m) => m.sender_type === "customer");
-
-    if (!lastCustomerMsg) return { expired: true, remaining: tTimer("noCustomerMessages") };
-
-    const hoursSince = differenceInHours(new Date(), new Date(lastCustomerMsg.created_at));
-    const expired = hoursSince >= 24;
-
-    if (expired) {
-      return { expired: true, remaining: tTimer("expired") };
-    }
-
-    const hoursLeft = 24 - hoursSince;
-    const remaining =
-      hoursLeft >= 1
-        ? tTimer("xhRemaining", { hours: Math.floor(hoursLeft) })
-        : tTimer("xmRemaining", { minutes: Math.floor(hoursLeft * 60) });
-
-    return { expired, remaining };
-  }, [messages, tTimer]);
+  // The DB timestamp covers the entire thread, including messages outside
+  // the loaded page. Reuse the presence clock so the UI expires while idle.
+  const expiresAt = replyWindowExpiresAt(conversation?.last_inbound_at);
+  const remainingMs = expiresAt === null ? 0 : expiresAt - now;
+  const sessionExpired = remainingMs <= 0;
+  const remainingHours = Math.floor(remainingMs / 3_600_000);
+  const sessionLabel = expiresAt === null
+    ? tTimer("noCustomerMessages")
+    : sessionExpired
+      ? tTimer("expired")
+      : remainingHours >= 1
+        ? tTimer("xhRemaining", { hours: remainingHours })
+        : tTimer("xmRemaining", { minutes: Math.ceil(remainingMs / 60_000) });
+  const messageGroups = useMemo(() => groupMessagesByDate(messages), [messages]);
 
   // Store latest callback in a ref so fetchMessages doesn't need to
   // depend on `onMessagesLoaded` — otherwise parent re-renders cause
@@ -590,7 +582,7 @@ export function MessageThread({
       try {
         const res = await fetch("/api/whatsapp/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Idempotency-Key": globalThis.crypto?.randomUUID?.() ?? tempId },
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: "text",
@@ -601,6 +593,11 @@ export function MessageThread({
 
         const payload = await res.json().catch(() => ({}));
 
+        if (!res.ok && ["delivery_uncertain", "delivery_confirmed"].includes(payload?.code)) {
+          if (payload.code === "delivery_confirmed") onUpdateMessage(tempId, { status: "sent" });
+          toast.warning(tSend(payload.code === "delivery_confirmed" ? "deliveryConfirmed" : "deliveryUncertain"));
+          return;
+        }
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
           console.error("Failed to send message:", reason);
@@ -614,14 +611,11 @@ export function MessageThread({
         // with the real DB row. If realtime hasn't arrived yet, at least
         // flip status to 'sent' so the UI stops showing "sending".
         onUpdateMessage(tempId, confirmedSendUpdate(payload));
-      } catch (err) {
-        console.error("Failed to send message:", err);
-        const reason = err instanceof Error ? err.message : t("networkError");
-        toast.error(t("sendFailed", { reason }));
-        onUpdateMessage(tempId, { status: "failed" });
+      } catch {
+        toast.warning(tSend("deliveryUncertain"));
       }
     },
-    [conversation, onNewMessage, onUpdateMessage, t]
+    [conversation, onNewMessage, onUpdateMessage, t, tSend]
   );
 
   const handleSendMedia = useCallback(
@@ -654,7 +648,7 @@ export function MessageThread({
       try {
         const res = await fetch("/api/whatsapp/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Idempotency-Key": globalThis.crypto?.randomUUID?.() ?? tempId },
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: payload.kind,
@@ -667,27 +661,30 @@ export function MessageThread({
 
         const data = await res.json().catch(() => ({}));
 
+        if (!res.ok && ["delivery_uncertain", "delivery_confirmed"].includes(data?.code)) {
+          if (data.code === "delivery_confirmed") onUpdateMessage(tempId, { status: "sent" });
+          toast.warning(tSend(data.code === "delivery_confirmed" ? "deliveryConfirmed" : "deliveryUncertain"));
+          return;
+        }
         if (!res.ok) {
           const reason = data?.error || `HTTP ${res.status}`;
           console.error("Failed to send media:", reason);
           toast.error(t("sendFailed", { reason }));
           onUpdateMessage(tempId, { status: "failed" });
-          // The upload never reached the recipient — GC the orphaned
-          // object rather than leaving it in the public bucket forever.
-          void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+          // A disconnected or ambiguous provider request may still use
+          // this upload. Only remove media after a definite rejection.
+          if (data?.code === "meta_error" || res.status < 500) {
+            void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+          }
           return;
         }
 
         onUpdateMessage(tempId, confirmedSendUpdate(data));
-      } catch (err) {
-        console.error("Failed to send media:", err);
-        const reason = err instanceof Error ? err.message : t("networkError");
-        toast.error(t("sendFailed", { reason }));
-        onUpdateMessage(tempId, { status: "failed" });
-        void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+      } catch {
+        toast.warning(tSend("deliveryUncertain"));
       }
     },
-    [conversation, onNewMessage, onUpdateMessage, t],
+    [conversation, onNewMessage, onUpdateMessage, t, tSend],
   );
 
   const handleSendInteractive = useCallback(
@@ -713,7 +710,7 @@ export function MessageThread({
       try {
         const res = await fetch("/api/whatsapp/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Idempotency-Key": globalThis.crypto?.randomUUID?.() ?? tempId },
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: "interactive",
@@ -724,6 +721,11 @@ export function MessageThread({
 
         const data = await res.json().catch(() => ({}));
 
+        if (!res.ok && ["delivery_uncertain", "delivery_confirmed"].includes(data?.code)) {
+          if (data.code === "delivery_confirmed") onUpdateMessage(tempId, { status: "sent" });
+          toast.warning(tSend(data.code === "delivery_confirmed" ? "deliveryConfirmed" : "deliveryUncertain"));
+          return;
+        }
         if (!res.ok) {
           const reason = data?.error || `HTTP ${res.status}`;
           console.error("Failed to send interactive message:", reason);
@@ -733,14 +735,11 @@ export function MessageThread({
         }
 
         onUpdateMessage(tempId, confirmedSendUpdate(data));
-      } catch (err) {
-        console.error("Failed to send interactive message:", err);
-        const reason = err instanceof Error ? err.message : t("networkError");
-        toast.error(t("sendFailed", { reason }));
-        onUpdateMessage(tempId, { status: "failed" });
+      } catch {
+        toast.warning(tSend("deliveryUncertain"));
       }
     },
-    [conversation, onNewMessage, onUpdateMessage, t],
+    [conversation, onNewMessage, onUpdateMessage, t, tSend],
   );
 
   const handleStatusChange = useCallback(
@@ -792,7 +791,7 @@ export function MessageThread({
       try {
         const res = await fetch("/api/whatsapp/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Idempotency-Key": globalThis.crypto?.randomUUID?.() ?? tempId },
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: "template",
@@ -814,6 +813,11 @@ export function MessageThread({
 
         const payload = await res.json().catch(() => ({}));
 
+        if (!res.ok && ["delivery_uncertain", "delivery_confirmed"].includes(payload?.code)) {
+          if (payload.code === "delivery_confirmed") onUpdateMessage(tempId, { status: "sent" });
+          toast.warning(tSend(payload.code === "delivery_confirmed" ? "deliveryConfirmed" : "deliveryUncertain"));
+          return;
+        }
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
           console.error("Failed to send template:", reason);
@@ -823,14 +827,11 @@ export function MessageThread({
         }
 
         onUpdateMessage(tempId, confirmedSendUpdate(payload));
-      } catch (err) {
-        console.error("Failed to send template:", err);
-        const reason = err instanceof Error ? err.message : t("networkError");
-        toast.error(t("sendTemplateFailed", { reason }));
-        onUpdateMessage(tempId, { status: "failed" });
+      } catch {
+        toast.warning(tSend("deliveryUncertain"));
       }
     },
-    [conversation, onNewMessage, onUpdateMessage, t],
+    [conversation, onNewMessage, onUpdateMessage, t, tSend],
   );
 
   // Build a quick id → Message map so reply quotes can be rendered without
@@ -973,7 +974,6 @@ export function MessageThread({
   }
 
   const displayName = contact.name || contactHandle(contact);
-  const messageGroups = groupMessagesByDate(messages);
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
   );
@@ -1004,7 +1004,7 @@ export function MessageThread({
               type="button"
               onClick={onBack}
               aria-label={t("backToConversations")}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+              className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -1014,9 +1014,8 @@ export function MessageThread({
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {contactHandle(contact)}
-            </p>
+            <p className="truncate text-xs text-muted-foreground">{contactHandle(contact)}</p>
+            <p className="truncate text-xs text-muted-foreground sm:hidden">{sessionLabel}</p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
               the name + back arrow keep their room. */}
@@ -1024,15 +1023,21 @@ export function MessageThread({
             variant="outline"
             className={cn(
               "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
-              sessionInfo.expired ? "text-red-400" : "text-primary"
+              sessionExpired ? "text-muted-foreground" : "text-primary"
             )}
           >
             <Clock className="h-3 w-3" />
-            {sessionInfo.remaining}
+            {sessionLabel}
           </Badge>
         </div>
 
         <div className="flex items-center gap-2">
+          {onShowMobileContact && (
+            <button type="button" onClick={onShowMobileContact} aria-label={t("showContactPanel")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted lg:hidden">
+              <PanelRightOpen className="size-5" aria-hidden="true" />
+            </button>
+          )}
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
@@ -1116,7 +1121,7 @@ export function MessageThread({
               )}
             >
               <UserPlus className="h-3 w-3" />
-              <span className="hidden sm:inline">{assignLabel}</span>
+              <span className="sr-only sm:not-sr-only">{assignLabel}</span>
               <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -1281,7 +1286,7 @@ export function MessageThread({
       {/* Composer */}
       <MessageComposer
         conversationId={conversation.id}
-        sessionExpired={sessionInfo.expired}
+        sessionExpired={sessionExpired}
         onSend={handleSend}
         onSendMedia={handleSendMedia}
         onSendInteractive={handleSendInteractive}

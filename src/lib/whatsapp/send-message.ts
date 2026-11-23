@@ -23,10 +23,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
   sendTextMessage,
-  sendTemplateMessage,
   sendMediaMessage,
   sendInteractiveButtons,
   sendInteractiveList,
+  MetaApiError,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
 import {
@@ -42,6 +42,10 @@ import {
 } from '@/lib/whatsapp/phone-utils';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
 import { applyPendingMessageStatuses } from '@/lib/whatsapp/message-status-sync';
+import { sendEligibleTemplate, TemplateEligibilityError } from '@/lib/whatsapp/template-delivery';
+import { isValidSendRequestKey, reserveSendAttempt, settleSendAttempt } from '@/lib/whatsapp/outbound-attempts';
+import { isReplyWindowOpen } from '@/lib/whatsapp/reply-window';
+import { getT } from '@/lib/i18n/translate';
 import type { MessageTemplate } from '@/types';
 import {
   resolveTemplateRow,
@@ -74,6 +78,12 @@ export class SendMessageError extends Error {
   }
 }
 
+const tSend = getT('LibErrors.send');
+
+export function replyWindowClosedError(): SendMessageError {
+  return new SendMessageError('reply_window_closed', tSend('replyWindowClosed'), 409);
+}
+
 export interface SendMessageParams {
   conversationId: string;
   messageType: string;
@@ -90,6 +100,7 @@ export interface SendMessageParams {
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
   senderId?: string | null;
+  requestKey?: string;
 }
 
 export interface SendMessageResult {
@@ -204,7 +215,12 @@ export async function sendMessageToConversation(
     templateMessageParams,
     interactivePayload,
     replyToMessageId,
+    requestKey,
   } = params;
+
+  if (requestKey !== undefined && !isValidSendRequestKey(requestKey)) {
+    throw new SendMessageError('bad_request', tSend('requestKeyInvalid'), 400);
+  }
 
   if (!conversationId) {
     throw new SendMessageError(
@@ -234,6 +250,10 @@ export async function sendMessageToConversation(
 
   if (convError || !conversation) {
     throw new SendMessageError('not_found', 'Conversation not found', 404);
+  }
+
+  if (messageType !== 'template' && !isReplyWindowOpen(conversation.last_inbound_at)) {
+    throw replyWindowClosedError();
   }
 
   const contact = conversation.contact;
@@ -343,9 +363,23 @@ export async function sendMessageToConversation(
     sendLanguage = resolved.language;
   }
 
+  // Send via Meta — retry across phone-number variants if Meta rejects
+  // with "recipient not in allowed list"; persist a working variant
+  // back to the contact so the next send goes straight through.
+  const admin = supabaseAdmin();
+  const reservation = await reserveSendAttempt(admin, conversationId, { ...params, requestKey: undefined }, requestKey);
+  const previous = reservation.previous;
+  if (previous === 'conflict') throw new SendMessageError('idempotency_conflict', tSend('requestKeyConflict'), 409);
+  if (previous === 'rejected') throw new SendMessageError('send_previously_rejected', tSend('requestPreviouslyRejected'), 409);
+  if (previous === 'confirmed') throw new SendMessageError('delivery_confirmed', tSend('deliveryConfirmed'), 409);
+  if (previous === 'uncertain') throw new SendMessageError('delivery_uncertain', tSend('deliveryUncertain'), 409);
+  if (previous) return previous;
+
+  const callbackData = `everloop-send:${reservation.callbackId}`;
+
   const attempt = async (phone: string): Promise<string> => {
     if (messageType === 'template') {
-      const result = await sendTemplateMessage({
+      const result = await sendEligibleTemplate(db, accountId, {
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,
@@ -354,7 +388,7 @@ export async function sendMessageToConversation(
         template: templateRow ?? undefined,
         messageParams: templateMessageParams ?? undefined,
         params: templateParams || [],
-        contextMessageId,
+        contextMessageId, callbackData,
       });
       return result.messageId;
     }
@@ -367,7 +401,7 @@ export async function sendMessageToConversation(
         link: mediaUrl!,
         caption: contentText || undefined,
         filename: filename || undefined,
-        contextMessageId,
+        contextMessageId, callbackData,
       });
       return result.messageId;
     }
@@ -382,7 +416,7 @@ export async function sendMessageToConversation(
           headerText: p.header || undefined,
           footerText: p.footer || undefined,
           buttons: p.buttons,
-          contextMessageId,
+          contextMessageId, callbackData,
         });
         return result.messageId;
       }
@@ -395,7 +429,7 @@ export async function sendMessageToConversation(
         headerText: p.header || undefined,
         footerText: p.footer || undefined,
         sections: p.sections,
-        contextMessageId,
+        contextMessageId, callbackData,
       });
       return result.messageId;
     }
@@ -404,14 +438,11 @@ export async function sendMessageToConversation(
       accessToken,
       to: phone,
       text: contentText!,
-      contextMessageId,
+      contextMessageId, callbackData,
     });
     return result.messageId;
   };
 
-  // Send via Meta — retry across phone-number variants if Meta rejects
-  // with "recipient not in allowed list"; persist a working variant
-  // back to the contact so the next send goes straight through.
   let waMessageId = '';
   let workingPhone = sendTarget;
   try {
@@ -440,11 +471,22 @@ export async function sendMessageToConversation(
 
     if (lastError) throw lastError;
   } catch (err) {
+    if (err instanceof TemplateEligibilityError) {
+      await settleSendAttempt(admin, conversationId, reservation.key, 'rejected');
+      throw new SendMessageError(err.code, err.message, err.code === 'marketing_consent_unavailable' ? 503 : 409);
+    }
+    if (!(err instanceof MetaApiError) || err.httpStatus >= 500 || err.httpStatus === 408) {
+      await settleSendAttempt(admin, conversationId, reservation.key, 'uncertain');
+      throw new SendMessageError('delivery_uncertain', tSend('deliveryUncertain'), 502);
+    }
+    await settleSendAttempt(admin, conversationId, reservation.key, 'rejected');
     const message =
       err instanceof Error ? err.message : 'Unknown Meta API error';
     console.error('[send-message] Meta send failed for all variants:', message);
     throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
   }
+
+  await settleSendAttempt(admin, conversationId, reservation.key, 'accepted', { providerMessageId: waMessageId });
 
   if (hasValidPhone && workingPhone !== sanitizedPhone) {
     console.log(
@@ -499,16 +541,18 @@ export async function sendMessageToConversation(
     .select()
     .single();
 
-  if (msgError) {
+  if (msgError || !messageRecord) {
     console.error('[send-message] error inserting sent message:', msgError);
     throw new SendMessageError(
-      'db_error',
-      `Message sent to Meta but failed to save to DB: ${msgError.message}`,
-      500
+      'delivery_uncertain',
+      tSend('deliveryUncertain'),
+      502
     );
   }
 
-  await applyPendingMessageStatuses(supabaseAdmin(), accountId, waMessageId);
+  await settleSendAttempt(admin, conversationId, reservation.key, 'saved', { messageId: messageRecord.id });
+
+  await applyPendingMessageStatuses(admin, accountId, waMessageId);
 
   const lastMessageText =
     messageType === 'interactive'

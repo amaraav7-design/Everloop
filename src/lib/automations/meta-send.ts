@@ -1,4 +1,5 @@
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { sendTextMessage } from '@/lib/whatsapp/meta-api'
+import { sendEligibleTemplate } from '@/lib/whatsapp/template-delivery'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
@@ -10,7 +11,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
-import { assertConversationInAccount } from '@/lib/whatsapp/conversation-scope'
+import { assertConversationSendAllowed } from '@/lib/whatsapp/conversation-scope'
 import {
   resolveTemplateRow,
   templateContentText,
@@ -136,7 +137,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
 
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
-  await assertConversationInAccount(db, input.conversationId, input.accountId)
+  await assertConversationSendAllowed(db, input, input.kind === 'text' ? 'free_form' : 'template')
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).
@@ -175,7 +176,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
-      const r = await sendTemplateMessage({
+      const r = await sendEligibleTemplate(db, input.accountId, {
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,

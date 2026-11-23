@@ -146,6 +146,7 @@ export function ImportModal({
     failed: number;
     failedDetails: { phone: string; name?: string; reason: string }[];
     tagsAssigned: number;
+    consentRecorded: number;
   } | null>(null);
 
   function reset() {
@@ -239,17 +240,14 @@ export function ImportModal({
 
       // 2) Skip numbers already in this account. One read of the
       //    generated `phone_normalized` column (migration 022) → Set.
-      const { data: existingRows } = await supabase
-        .from('contacts')
-        .select('phone_normalized')
-        .eq('account_id', accountId);
-      const existing = new Set(
-        (existingRows ?? [])
-          .map(
-            (r) => (r as { phone_normalized: string | null }).phone_normalized
-          )
-          .filter((p): p is string => !!p)
-      );
+      const existing = new Set<string>();
+      for (let i = 0; i < unique.length; i += 100) {
+        const phones = unique.slice(i, i + 100).map(row => normalizeKey(row.phone));
+        const { data, error } = await supabase.from('contacts').select('phone_normalized')
+          .eq('account_id', accountId).in('phone_normalized', phones);
+        if (error) throw error;
+        for (const row of data ?? []) if (row.phone_normalized) existing.add(row.phone_normalized);
+      }
 
       const toInsert = unique.filter((row) => {
         if (existing.has(normalizeKey(row.phone))) {
@@ -274,6 +272,14 @@ export function ImportModal({
       }
 
       const tagAssignments: ContactTagAssignment[] = [];
+      const consentProofs: { contact_id: string; phone: string; occurred_at: string; evidence: string }[] = [];
+      function trackImportedContact(source: ParsedContactRow, contactId: string) {
+        imported++;
+        if (source.tagNames.length) tagAssignments.push({ contactId, tagNames: source.tagNames });
+        if (source.marketingConsent) consentProofs.push({
+          contact_id: contactId, phone: source.phone, ...source.marketingConsent,
+        });
+      }
 
       // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
       //    unique index is the backstop: a 23505 (race, or a format
@@ -294,7 +300,7 @@ export function ImportModal({
         const { data, error } = await supabase
           .from('contacts')
           .insert(rows)
-          .select('id');
+          .select('id, phone_normalized');
 
         if (error) {
           // Retry individually so one bad/duplicate row doesn't sink
@@ -309,13 +315,7 @@ export function ImportModal({
               .single();
 
             if (!singleErr && singleData) {
-              imported++;
-              if (source.tagNames.length > 0) {
-                tagAssignments.push({
-                  contactId: singleData.id,
-                  tagNames: source.tagNames,
-                });
-              }
+              trackImportedContact(source, singleData.id);
             } else if (isUniqueViolation(singleErr)) {
               skipped++;
             } else {
@@ -339,18 +339,10 @@ export function ImportModal({
             }
           }
         } else {
-          const inserted = data ?? [];
-          imported += inserted.length;
-          // inserted[j] ↔ chunk[j] only holds because a single INSERT
-          // preserves RETURNING order. If this path is ever split into
-          // parallel inserts, zip by phone or returned id instead.
-          for (let j = 0; j < inserted.length; j++) {
-            const source = chunk[j];
-            if (!source || source.tagNames.length === 0) continue;
-            tagAssignments.push({
-              contactId: inserted[j].id,
-              tagNames: source.tagNames,
-            });
+          const byPhone = new Map(chunk.map(row => [normalizeKey(row.phone), row]));
+          for (const row of data ?? []) {
+            const source = byPhone.get(row.phone_normalized);
+            if (source) trackImportedContact(source, row.id);
           }
         }
       }
@@ -368,6 +360,24 @@ export function ImportModal({
         toast.warning(t('toastTagsWarning'));
       }
 
+      let consentRecorded = 0;
+      for (let i = 0; i < consentProofs.length; i += 100) {
+        try {
+          const response = await fetch('/api/contacts/marketing-consent/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(consentProofs.slice(i, i + 100)),
+          });
+          if (!response.ok) break;
+          const data = await response.json();
+          if (typeof data.recorded !== 'number') break;
+          consentRecorded += data.recorded;
+        } catch {
+          break;
+        }
+      }
+      if (consentRecorded < consentProofs.length) toast.warning(t('toastConsentWarning'));
+
       setResult({
         imported,
         skipped,
@@ -375,6 +385,7 @@ export function ImportModal({
         failed,
         failedDetails,
         tagsAssigned,
+        consentRecorded,
       });
       if (imported > 0) {
         toast.success(t('toastImported', { count: imported }));
@@ -429,8 +440,8 @@ export function ImportModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden border-border/80 bg-popover p-0 text-popover-foreground sm:max-w-2xl">
-        <div className="shrink-0 space-y-4 border-b border-border/80 px-6 pt-6 pb-5">
+      <DialogContent className="block max-h-[min(var(--dialog-max-height),45rem)] border-border/80 p-0 sm:max-w-2xl">
+        <div className="space-y-4 border-b border-border/80 px-4 pt-6 pb-5 sm:px-6">
           <DialogHeader className="gap-1.5">
             <DialogTitle className="text-lg text-popover-foreground">
               {t('title')}
@@ -446,6 +457,7 @@ export function ImportModal({
                 })
               }}
             />
+            <p className="text-xs text-muted-foreground">{t('consentCsvHint')}</p>
           </DialogHeader>
 
           <div
@@ -502,7 +514,7 @@ export function ImportModal({
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="px-4 py-4 empty:hidden sm:px-6">
           {preview.length > 0 && !result && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -617,6 +629,12 @@ export function ImportModal({
                     {t('resultTags', { count: result.tagsAssigned })}
                   </div>
                 )}
+                {result.consentRecorded > 0 && (
+                  <p className="text-sm text-primary">{t('resultConsentRecorded', { count: result.consentRecorded })}</p>
+                )}
+                {result.imported > result.consentRecorded && (
+                  <p className="text-sm text-muted-foreground">{t('resultWithoutConsent', { count: result.imported - result.consentRecorded })}</p>
+                )}
                 {result.skipped > 0 && (
                   <div className="flex items-center gap-1.5 text-sm text-amber-400">
                     <AlertTriangle className="size-4 shrink-0" />
@@ -666,7 +684,7 @@ export function ImportModal({
           )}
         </div>
 
-        <DialogFooter className="mt-0 shrink-0 gap-2 border-t border-border/80 bg-background/50 px-6 py-4 sm:justify-end">
+        <DialogFooter className="mx-0 mb-0 border-border/80 bg-background/50 px-4 sm:px-6">
           <Button
             type="button"
             variant="outline"

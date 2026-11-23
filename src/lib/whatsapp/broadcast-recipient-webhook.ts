@@ -32,6 +32,7 @@ export async function applyBroadcastRecipientStatus(
 ): Promise<RecipientStatusOutcome> {
   if (!isRecipientStatus(event.status)) return 'skipped';
   const predecessors = allowedPredecessors(event.status);
+  if (event.status === 'read') predecessors.push('replied');
   if (predecessors.length === 0) return 'skipped';
 
   const update: Record<string, unknown> = { status: event.status };
@@ -69,40 +70,25 @@ export function isReplyAttributable(
   if (!recipient.sent_at) return false;
   const sentAt = Date.parse(recipient.sent_at);
   if (Number.isNaN(sentAt)) return false;
-  return now.getTime() - sentAt <= BROADCAST_REPLY_WINDOW_MS;
+  return sentAt <= now.getTime() && now.getTime() - sentAt <= BROADCAST_REPLY_WINDOW_MS;
 }
 
 export async function flagBroadcastReply(
   db: SupabaseClient,
   accountId: string,
   contactId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  contextMessageId: string | null = null,
 ): Promise<RecipientStatusOutcome> {
-  const { data: rows, error } = await db
-    .from('broadcast_recipients')
-    .select('id, status, sent_at, broadcasts!inner(account_id)')
-    .eq('contact_id', contactId)
-    .eq('broadcasts.account_id', accountId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
+  const { data, error } = await db.rpc('record_campaign_reply', {
+    p_account: accountId,
+    p_contact: contactId,
+    p_at: now.toISOString(),
+    p_context: contextMessageId,
+  });
   if (error) {
-    console.error('Error fetching latest broadcast recipient:', error);
+    console.error('Error recording campaign reply:', error.code);
     return 'error';
   }
-  const latest = (rows?.[0] ?? null) as LatestBroadcastRecipient | null;
-  if (!latest || !isReplyAttributable(latest, now)) return 'skipped';
-
-  const { data: updated, error: updateError } = await db
-    .from('broadcast_recipients')
-    .update({ status: 'replied', replied_at: now.toISOString() })
-    .eq('id', latest.id)
-    .in('status', allowedPredecessors('replied'))
-    .select('id');
-
-  if (updateError) {
-    console.error('Error marking broadcast recipient replied:', updateError);
-    return 'error';
-  }
-  return updated && updated.length > 0 ? 'updated' : 'skipped';
+  return data ? 'updated' : 'skipped';
 }

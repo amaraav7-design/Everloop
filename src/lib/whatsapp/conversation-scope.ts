@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getT } from '@/lib/i18n/translate'
+import { isReplyWindowOpen } from '@/lib/whatsapp/reply-window'
 
 const t = getT('LibErrors')
 
@@ -23,28 +24,33 @@ const t = getT('LibErrors')
 // ------------------------------------------------------------
 
 /**
- * Throw unless `conversationId` is a conversation of `accountId`.
+ * Check that the conversation belongs to the same account and contact as
+ * the send. Free-form sends also require that contact's reply window.
  *
  * The message is deliberately the same for "no such conversation" and
  * "not yours" — the engines surface it into automation logs the
  * triggering user can read, and distinguishing the two would confirm
  * whether a given UUID exists.
  */
-export async function assertConversationInAccount(
+export async function assertConversationSendAllowed(
   db: SupabaseClient,
-  conversationId: string,
-  accountId: string,
+  target: { conversationId: string; accountId: string; contactId: string },
+  messageType: 'free_form' | 'template',
 ): Promise<void> {
   const { data, error } = await db
     .from('conversations')
-    .select('id')
-    .eq('id', conversationId)
-    .eq('account_id', accountId)
+    .select('last_inbound_at')
+    .eq('id', target.conversationId)
+    .eq('account_id', target.accountId)
+    .eq('contact_id', target.contactId)
     .maybeSingle()
   if (error) {
     throw new Error(t('send.conversationLookupFailed', { message: error.message }))
   }
   if (!data) {
     throw new Error(t('send.conversationNotFound'))
+  }
+  if (messageType === 'free_form' && !isReplyWindowOpen(data.last_inbound_at)) {
+    throw new Error(t('send.replyWindowClosed'))
   }
 }

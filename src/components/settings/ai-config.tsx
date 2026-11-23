@@ -28,6 +28,7 @@ import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
+import { GOOGLE_FREE_TEXT_MODELS, isManagedProvider, MANAGED_PROVIDER_LABEL, type ManagedAiProvider } from '@/lib/ai/managed-providers';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
@@ -39,16 +40,21 @@ const MASKED_KEY = '••••••••••••••••';
 // unassigned" choice gets a sentinel that maps to null in the payload.
 const HANDOFF_QUEUE = '__queue__';
 
-const PROVIDER_LABEL: Record<Exclude<AiProvider, 'openai_compatible'>, string> = {
+const PROVIDER_LABEL = {
   openai: 'OpenAI',
   anthropic: 'Anthropic (Claude)',
+  ...MANAGED_PROVIDER_LABEL,
 };
 
 const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   openai: 'sk-...',
   anthropic: 'sk-ant-...',
   openai_compatible: 'your-api-key',
+  openrouter: 'sk-or-…',
+  google_ai_studio: 'AIza…',
 };
+
+type ProviderConnection = { provider: ManagedAiProvider; model: string; free_only: boolean };
 
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
@@ -61,6 +67,10 @@ export function AiConfig() {
   const [removing, setRemoving] = useState(false);
 
   const [configured, setConfigured] = useState(false);
+  const [savedProvider, setSavedProvider] = useState<AiProvider | null>(null);
+  const [connections, setConnections] = useState<ProviderConnection[]>([]);
+  const [freeOnly, setFreeOnly] = useState(true);
+  const [autoReplyPilot, setAutoReplyPilot] = useState(false);
   const [provider, setProvider] = useState<AiProvider>('openai');
   const [model, setModel] = useState(AI_PROVIDER_DEFAULT_MODEL.openai);
   const [baseUrl, setBaseUrl] = useState('');
@@ -88,8 +98,15 @@ export function AiConfig() {
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/config');
+      const [res, status] = await Promise.all([
+        fetch('/api/ai/config', { cache: 'no-store' }),
+        canEdit ? fetch('/api/ai/connections', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null) : null,
+      ]);
       const data = await res.json();
+      const savedConnections: ProviderConnection[] = status?.connections ?? [];
+      setConnections(savedConnections);
+      setAutoReplyPilot(Boolean(status?.auto_reply_pilot));
+      setFreeOnly(savedConnections.find(connection => connection.provider === data.provider)?.free_only ?? true);
       if (!res.ok) {
         toast.error(data.error ?? t('loadFailed'));
         return;
@@ -97,6 +114,7 @@ export function AiConfig() {
       if (data.configured) {
         setConfigured(true);
         setProvider(data.provider);
+        setSavedProvider(data.provider);
         setModel(data.model);
         setBaseUrl(data.base_url ?? '');
         setSystemPrompt(data.system_prompt ?? '');
@@ -116,28 +134,32 @@ export function AiConfig() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [canEdit, t]);
 
   useEffect(() => {
-    if (!accountId || loadedAccountIdRef.current === accountId) return;
+    if (profileLoading || !accountId || loadedAccountIdRef.current === accountId) return;
     loadedAccountIdRef.current = accountId;
     void fetchConfig();
     // Members populate the handoff-target picker. Best-effort — on an
     // older deployment without the endpoint the picker just shows the
     // queue option.
     void fetchAccountMembers().then(setMembers);
-  }, [accountId, fetchConfig]);
+  }, [accountId, fetchConfig, profileLoading]);
 
-  // Swap the model default when the provider changes, unless the user
-  // typed a custom model.
   const handleProviderChange = (next: AiProvider) => {
+    if (provider === next) return;
+    const saved = connections.find(connection => connection.provider === next);
+    const hasKey = Boolean(saved) || (next === savedProvider && configured);
     setProvider(next);
-    const isDefaultModel =
-      model === AI_PROVIDER_DEFAULT_MODEL.openai ||
-      model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
-      model === AI_PROVIDER_DEFAULT_MODEL.openai_compatible ||
-      model.trim() === '';
-    if (isDefaultModel) setModel(next === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[next]);
+    setModel(saved?.model ?? (next === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[next]));
+    setFreeOnly(saved?.free_only ?? true);
+    setHasStoredKey(hasKey);
+    setApiKey(hasKey ? MASKED_KEY : '');
+    setKeyEdited(false);
+    if (isManagedProvider(next)) {
+      setAutoReplyEnabled(false);
+      setIsActive(false);
+    }
   };
 
   const keyPayload = () => (keyEdited ? apiKey.trim() : undefined);
@@ -151,6 +173,7 @@ export function AiConfig() {
     model: model.trim(),
     base_url: provider === 'openai_compatible' ? baseUrl.trim() : null,
     api_key: keyPayload(),
+    free_only: freeOnly,
     embeddings_api_key: embeddingsKeyPayload(),
     system_prompt: systemPrompt.trim() || null,
     is_active: isActive,
@@ -170,6 +193,7 @@ export function AiConfig() {
           model: model.trim(),
           base_url: provider === 'openai_compatible' ? baseUrl.trim() : null,
           api_key: keyPayload(),
+          free_only: freeOnly,
         }),
       });
       const data = await res.json();
@@ -191,7 +215,7 @@ export function AiConfig() {
       toast.error(t('missingBaseUrl'));
       return;
     }
-    if (!configured && !keyEdited) {
+    if (!hasStoredKey && !keyPayload()) {
       toast.error(t('missingApiKey'));
       return;
     }
@@ -225,6 +249,8 @@ export function AiConfig() {
         invalidateAiAccountStatus();
         toast.success(t('removeSuccess'));
         setConfigured(false);
+        setSavedProvider(null);
+        setConnections([]);
         setBaseUrl('');
         setHasStoredKey(false);
         setApiKey('');
@@ -291,6 +317,8 @@ export function AiConfig() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="openrouter">{PROVIDER_LABEL.openrouter}</SelectItem>
+                    <SelectItem value="google_ai_studio">{PROVIDER_LABEL.google_ai_studio}</SelectItem>
                     <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
                     <SelectItem value="anthropic">
                       {PROVIDER_LABEL.anthropic}
@@ -304,13 +332,22 @@ export function AiConfig() {
 
               <div className="space-y-2">
                 <Label htmlFor="ai-model">{t('model')}</Label>
-                <Input
-                  id="ai-model"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
-                  disabled={disabled}
-                />
+                {provider === 'google_ai_studio' ? (
+                  <Select value={model} onValueChange={value => { if (value) setModel(value); }} disabled={disabled}>
+                    <SelectTrigger id="ai-model"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {GOOGLE_FREE_TEXT_MODELS.map(choice => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="ai-model"
+                    value={model}
+                    onChange={event => setModel(event.target.value)}
+                    placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
+                    disabled={disabled}
+                  />
+                )}
               </div>
 
               {provider === 'openai_compatible' && (
@@ -328,6 +365,21 @@ export function AiConfig() {
                 </div>
               )}
             </div>
+
+            {provider === 'openrouter' && (
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                <div>
+                  <Label htmlFor="openrouter-free-only">{t('connections.freeOnly')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('connections.freeModels')}</p>
+                </div>
+                <Switch id="openrouter-free-only" checked={freeOnly} onCheckedChange={setFreeOnly} disabled={disabled} />
+              </div>
+            )}
+            {isManagedProvider(provider) && (
+              <p className="text-sm text-muted-foreground">
+                {t(provider === 'google_ai_studio' ? 'connections.googleTestOnly' : 'connections.openRouterDrafts')}
+              </p>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="ai-key">{t('apiKey')}</Label>
@@ -445,7 +497,7 @@ export function AiConfig() {
               <Switch
                 checked={isActive}
                 onCheckedChange={setIsActive}
-                disabled={disabled}
+                disabled={disabled || provider === 'google_ai_studio'}
               />
             </div>
 
@@ -461,7 +513,7 @@ export function AiConfig() {
               <Switch
                 checked={autoReplyEnabled}
                 onCheckedChange={setAutoReplyEnabled}
-                disabled={disabled || !isActive}
+                disabled={disabled || !isActive || (isManagedProvider(provider) && (provider !== 'openrouter' || !autoReplyPilot))}
               />
             </div>
 

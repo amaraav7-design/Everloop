@@ -6,7 +6,7 @@
 // whether the account is on OpenAI or Anthropic.
 // ============================================================
 
-export type AiProvider = 'openai' | 'anthropic' | 'openai_compatible'
+export type AiProvider = 'openai' | 'anthropic' | 'openai_compatible' | 'openrouter' | 'google_ai_studio'
 
 /**
  * Account AI setup, decrypted and ready to use. Produced by
@@ -19,6 +19,7 @@ export interface AiConfig {
   /** Base URL for OpenAI-compatible providers; null for native providers. */
   baseUrl: string | null
   apiKey: string
+  freeOnly?: boolean
   systemPrompt: string | null
   isActive: boolean
   autoReplyEnabled: boolean
@@ -34,6 +35,11 @@ export interface AiConfig {
 }
 
 /** A single conversation turn in the shape both providers accept. */
+export function isAiProvider(value: unknown): value is AiProvider {
+  return value === 'openai' || value === 'anthropic' || value === 'openai_compatible' ||
+    value === 'openrouter' || value === 'google_ai_studio'
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -54,6 +60,7 @@ export interface AiUsage {
 export interface ProviderResult {
   text: string
   usage: AiUsage | null
+  resolvedModel?: string
 }
 
 /** Outcome of a generation call. */
@@ -62,6 +69,7 @@ export interface GenerateResult {
   text: string
   /** True when the model asked to hand off to a human (auto-reply mode). */
   handoff: boolean
+  resolvedModel?: string
   /** Provider token usage for this call, or null when unavailable. */
   usage: AiUsage | null
 }

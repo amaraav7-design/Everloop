@@ -3,7 +3,7 @@
     "titleAccept": "Sign in to accept",
     "titleWelcome": "Welcome back",
     "descAccept": "Sign in and we'll take you to the invitation.",
-    "descWelcome": "Sign in to your account",
+    "descWelcome": "Sign in to your Everloop account",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "Password",
@@ -17,14 +17,14 @@
     "linkInvalid": "That link couldn’t be used to sign you in. If you were confirming your email, it may already be verified — just sign in below. For a password reset, request a new link and open it in the same browser you requested it from."
   },
   "Sidebar": {
-    "title": "CRM Template for WhatsApp",
+    "title": "Everloop",
     "primaryNav": "Primary",
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
     "contacts": "Contacts",
     "pipelines": "Pipelines",
-    "broadcasts": "Broadcasts",
+    "broadcasts": "Campaigns",
     "automations": "Automations",
     "flows": "Flows",
     "aiAgents": "AI Agents",
@@ -49,7 +49,7 @@
     "notifications": "Notifications",
     "contacts": "Contacts",
     "pipelines": "Pipelines",
-    "broadcasts": "Broadcasts",
+    "broadcasts": "Campaigns",
     "automations": "Automations",
     "settings": "Settings",
     "openMenu": "Open menu",
@@ -330,6 +330,7 @@
   },
   "Inbox": {
     "page": {
+      "mobileContactDetails": "Contact details",
       "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
     },
     "conversationList": {
@@ -348,7 +349,10 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "loadMore": "Load more",
+      "pageError": "Could not load conversations.",
+      "retryPage": "Retry"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -395,10 +399,10 @@
     },
     "composer": {
       "draftHint": "Tap the ✨ to draft a reply with AI — you can edit it before sending",
-      "sessionExpiredHint": "24-hour session expired. Use a template to re-engage.",
+      "sessionExpiredHint": "Free-form replies are available for 24 hours after a customer message. Use an approved template to reach out.",
       "templates": "Templates",
       "readOnlyPlaceholder": "Read-only — viewers can browse but not reply",
-      "sessionExpiredPlaceholder": "Session expired - use a template",
+      "sessionExpiredPlaceholder": "Use a template to reach out",
       "typeMessagePlaceholder": "Type a message... (Shift+Enter for new line)",
       "readOnlyTitle": "Read-only — your role can't send messages",
       "recording": "Recording… {current} / {max}",
@@ -420,7 +424,7 @@
       "draftWithAI": "Draft a reply with AI",
       "addCaption": "Add a caption…",
       "removeAttachment": "Remove attachment",
-      "moreActions": "More",
+      "moreActions": "More message actions",
       "interactiveMessage": "Interactive message",
       "quickReplies": "Quick replies",
       "quickRepliesEmpty": "No quick replies yet. Add some in Settings → Quick replies.",
@@ -531,6 +535,34 @@
     }
   },
   "Contacts": {
+    "marketingConsent": {
+      "title": "WhatsApp marketing permission",
+      "unknown": "No permission recorded",
+      "opted_in": "Opted in",
+      "opted_out": "Opted out",
+      "loading": "Loading permission…",
+      "loadFailed": "Could not load marketing permission.",
+      "saveFailed": "Could not update marketing permission.",
+      "contactUnavailable": "Contact unavailable.",
+      "addressUnavailable": "Add a valid WhatsApp number to record permission.",
+      "recordOptIn": "Record opt-in",
+      "stopMarketing": "Stop marketing",
+      "source": "Permission source",
+      "selectSource": "Choose a source",
+      "date": "Date and time received",
+      "evidence": "Evidence reference",
+      "evidenceHelp": "Use a form submission ID or a short note. Avoid sensitive information.",
+      "cancel": "Cancel",
+      "invalidEvidence": "Provide a source, a past date and time, and an evidence reference.",
+      "sources": {
+        "website": "Website",
+        "checkout": "Checkout",
+        "whatsapp": "WhatsApp",
+        "in_person": "In person",
+        "other": "Other",
+        "csv": "CSV import"
+      }
+    },
     "page": {
       "title": "Contacts",
       "subtitle": "Manage your contact list. {count} total contacts.",
@@ -679,6 +711,10 @@
       "networkError": "network error"
     },
     "importModal": {
+      "consentCsvHint": "To record documented opt-ins, include whatsapp_opt_in_at in ISO 8601 with a timezone and whatsapp_opt_in_evidence with a reference.",
+      "resultConsentRecorded": "{count} marketing permissions recorded",
+      "resultWithoutConsent": "{count} imported without a new permission record",
+      "toastConsentWarning": "Some imported permissions could not be recorded. Review those contacts before sending.",
       "title": "Import Contacts",
       "desc": "Upload a CSV with a required <phoneCode>phone</phoneCode> column. Optional: <nameCode>name</nameCode>, <emailCode>email</emailCode>, <companyCode>company</companyCode>, <tagsCode>tags</tagsCode> (comma-separated; quote multi-tag cells).",
       "uploadDropzone": "Click to choose a CSV file",
@@ -778,7 +814,8 @@
         "proposalSent": "Proposal Sent",
         "negotiation": "Negotiation",
         "won": "Won"
-      }
+      },
+      "mobileStage": "Stage for {deal}"
     },
     "board": {
       "dropDealHere": "Drop a deal here",
@@ -874,11 +911,11 @@
   },
   "Broadcasts": {
     "page": {
-      "title": "Broadcasts",
+      "title": "Campaigns",
       "subtitle": "Send bulk messages to your contacts using approved templates.",
-      "newBroadcast": "New Broadcast",
-      "noBroadcastsYet": "No broadcasts yet",
-      "createFirst": "Create your first broadcast to reach your contacts at scale.",
+      "newBroadcast": "New campaign",
+      "noBroadcastsYet": "No campaigns yet",
+      "createFirst": "Create your first campaign with an approved WhatsApp template.",
       "table": {
         "name": "Name",
         "template": "Template",
@@ -890,7 +927,8 @@
       },
       "errorLoad": "Failed to load broadcasts",
       "broadcastInProgress": "Broadcast in progress",
-      "retry": "Retry"
+      "retry": "Retry",
+      "mobileDelivery": "{delivered} of {total} delivered"
     },
     "status": {
       "draft": "Draft",
@@ -902,7 +940,13 @@
       "delivered": "Delivered",
       "read": "Read",
       "replied": "Replied",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "queued": "Queued",
+      "paused": "Paused",
+      "canceled": "Canceled",
+      "excluded": "Excluded",
+      "uncertain": "Delivery uncertain",
+      "partial": "Completed with issues"
     },
     "detail": {
       "backToBroadcasts": "Back to Broadcasts",
@@ -952,10 +996,29 @@
       "toastResumeStartedCapped": "Sending {count} recipients in the background. {remaining} more will need another run.",
       "toastResumeFailed": "Could not resume: {error}",
       "unknownError": "Unknown error",
-      "unknownContact": "Unknown"
+      "unknownContact": "Unknown",
+      "control": {
+        "scheduledFor": "Scheduled for {date}",
+        "pending": "{count} pending",
+        "excluded": "{count} excluded",
+        "uncertain": "{count} awaiting confirmation",
+        "pause": "Pause",
+        "resume": "Resume",
+        "cancel": "Cancel campaign",
+        "confirmCancel": "Cancel the remaining sends? Messages already in progress may still go out.",
+        "keep": "Keep campaign",
+        "error": "Could not change the campaign.",
+        "reply": "Reply",
+        "attribution": "Attribution",
+        "direct": "Direct",
+        "inferred": "Inferred",
+        "exportFailed": "Could not export recipients.",
+        "previous": "Previous",
+        "next": "Next"
+      }
     },
     "new": {
-      "title": "New Broadcast",
+      "title": "New campaign",
       "subtitle": "Create and send a broadcast message to your contacts.",
       "steps": {
         "template": "Template",
@@ -968,7 +1031,10 @@
       "toastNotLinked": "Your profile is not linked to an account.",
       "toastFailedDraft": "Failed to save draft: {error}",
       "toastDraftSaved": "Draft saved",
-      "broadcastFailed": "Broadcast failed"
+      "broadcastFailed": "Broadcast failed",
+      "draftUnavailable": "This draft is unavailable.",
+      "loadingDraft": "Loading draft…",
+      "testQueued": "Test queued."
     },
     "wizard": {
       "next": "Next",
@@ -1055,7 +1121,9 @@
           "email": "Email"
         },
         "sampleName": "John Doe",
-        "sampleCompany": "Acme Corp"
+        "sampleCompany": "Acme Corp",
+        "headerValue": "Header text value",
+        "buttonSuffix": "Link suffix for “{label}”"
       },
       "scheduleSend": {
         "title": "Review & Send",
@@ -1073,14 +1141,31 @@
         "variablesMapped": "{count} mapped",
         "saveDraft": "Save as Draft",
         "sendNow": "Send Broadcast",
-        "sending": "Sending...",
+        "sending": "Preparing campaign…",
         "preparing": "Preparing...",
         "progressDesc": "Processing {current} of {total} recipients...",
         "toastFailedPreview": "Failed to load preview data",
-        "estimatedReach": "Estimated Reach",
+        "estimatedReach": "Eligible recipients",
         "language": "Language",
         "confirmTitle": "Confirm Broadcast",
-        "confirmDesc": "You are about to send this broadcast to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template. This action cannot be undone."
+        "confirmDesc": "You are about to send this broadcast to <b>{count, number}</b> {count, plural, =1 {contact} other {contacts}} using the <b>{template}</b> template. This action cannot be undone.",
+        "schedule": "Schedule",
+        "timing": "Send time",
+        "localTime": "Date and time ({zone})",
+        "invalidTime": "Choose a valid time in the future.",
+        "retryPreview": "Retry preview",
+        "noEligible": "No recipients are eligible for this campaign.",
+        "exclusions": {
+          "invalid_phone": "{count} invalid phone numbers",
+          "marketing_opt_out": "{count} opted out",
+          "marketing_consent_required": "{count} without marketing consent",
+          "invalid_template_parameters": "{count} with incomplete template values",
+          "duplicates": "{count} duplicate recipients"
+        },
+        "test": "Send test",
+        "testHint": "Choose a saved test contact who can receive this template.",
+        "testPhone": "Test phone number",
+        "testError": "Could not queue the test."
       }
     },
     "sending": {
@@ -1667,7 +1752,7 @@
       "done": "Done",
       "dialogTitle": "Invite a teammate",
       "networkError": "Could not reach the server. Try again?",
-      "fallbackAccountName": "our wacrm account",
+      "fallbackAccountName": "our Everloop account",
       "dialogDesc": "Generate a one-time invite link. Share it via WhatsApp, Slack, or any channel you like — no email service required.",
       "roleLabel": "Role",
       "validForLabel": "Link valid for",
@@ -1684,7 +1769,7 @@
       "labelTooLong": "Label must be {max} characters or fewer",
       "copied": "Invite link copied",
       "clipboardBlocked": "Clipboard blocked — copy the link manually",
-      "whatsappMessage": "Join {accountName} on wacrm using this link (valid for {expiresInDays} days): {url}",
+      "whatsappMessage": "Join {accountName} on Everloop using this link (valid for {expiresInDays} days): {url}",
       "createFailed": "Failed to create invitation"
     },
     "tagsAndFields": {
@@ -1804,8 +1889,8 @@
       "saveResubmit": "Save & Resubmit",
       "submitApproval": "Submit for Approval",
       "deleteDialogTitle": "Delete template?",
-      "deleteMetaDesc": "\"{name}\" will be deleted from Meta and from wacrm. Active broadcasts using this template will start failing on their next send. This can't be undone.",
-      "deleteLocalDesc": "\"{name}\" will be deleted from wacrm. It was never submitted to Meta, so no remote cleanup is needed.",
+      "deleteMetaDesc": "\"{name}\" will be deleted from Meta and from Everloop. Active broadcasts using this template will start failing on their next send. This can't be undone.",
+      "deleteLocalDesc": "\"{name}\" will be deleted from Everloop. It was never submitted to Meta, so no remote cleanup is needed.",
       "deleting": "Deleting…",
       "delete": "Delete",
       "toastLoadFailed": "Failed to load templates",
@@ -1857,7 +1942,7 @@
       "notConnected": "Not Connected",
       "connectedDesc": "Your access token authenticates with Meta. See Registration status below for whether webhooks are actually wired.",
       "notConnectedDesc": "Configure your Meta API credentials below to connect your WhatsApp Business account.",
-      "registered": "Registered — Meta will deliver events to wacrm",
+      "registered": "Registered — Meta will deliver events to Everloop",
       "notRegistered": "Not registered — Meta will not deliver events",
       "verifyWithMeta": "Verify with Meta",
       "subscribedSince": "Subscribed since {date}. Click Verify with Meta if events stop arriving.",
@@ -1882,7 +1967,7 @@
       "twoStepPin": "Two-step verification PIN",
       "optional": "(optional)",
       "pinPlaceholder": "6-digit PIN from Meta WhatsApp Manager",
-      "pinHint": "Needed only to wire inbound messages for a production number. Set it in Meta Business Manager → WhatsApp Accounts → Phone Numbers → Two-step verification, then paste it here so wacrm can subscribe the number — otherwise Meta routes inbound events to whichever app last claimed it (the symptom that hits second numbers under a shared WABA). Meta test numbers have no PIN and are pre-registered — leave this blank for them. Leaving it blank also keeps an existing registration untouched.",
+      "pinHint": "Needed only to wire inbound messages for a production number. Set it in Meta Business Manager → WhatsApp Accounts → Phone Numbers → Two-step verification, then paste it here so Everloop can subscribe the number — otherwise Meta routes inbound events to whichever app last claimed it (the symptom that hits second numbers under a shared WABA). Meta test numbers have no PIN and are pre-registered — leave this blank for them. Leaving it blank also keeps an existing registration untouched.",
       "webhookTitle": "Webhook Configuration",
       "webhookDesc": "Use this URL as your webhook callback in the Meta App Dashboard.",
       "webhookUrl": "Webhook Callback URL",
@@ -2130,7 +2215,7 @@
     },
     "aiConfig": {
       "title": "Agent setup",
-      "description": "Bring your own OpenAI, Anthropic, or OpenAI-compatible API key. wacrm calls the provider directly with your key — no per-seat AI fees, and your data stays yours. This powers AI-drafted replies in the inbox, the auto-reply bot, and the Playground.",
+      "description": "Bring your own AI keys. Drafts and test prompts are sent to the selected provider. OpenRouter and Google AI Studio keys are saved independently.",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",
       "loadFailed": "Failed to load AI configuration",
       "providerAndKey": "Provider & key",
@@ -2170,7 +2255,13 @@
       "providerOpenAiCompatible": "OpenAI-compatible API",
       "baseUrl": "Base URL",
       "baseUrlHint": "Base URL for the OpenAI-compatible API, for example https://api.groq.com/openai/v1. /chat/completions is added automatically unless you include that path yourself.",
-      "missingBaseUrl": "Enter the Base URL for the OpenAI-compatible API."
+      "missingBaseUrl": "Enter the Base URL for the OpenAI-compatible API.",
+      "connections": {
+        "freeOnly": "Free models only",
+        "freeModels": "Use the free router or a model ID ending in :free. Turning this off allows paid models on your OpenRouter account.",
+        "googleTestOnly": "Google AI Studio uses a fictional conversation here. A Google project on the free tier can use supported models within its quota.",
+        "openRouterDrafts": "OpenRouter processes drafts on its servers. Everloop requests zero-data-retention routing for customer drafts."
+      }
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
@@ -2233,7 +2324,7 @@
     "titleJoin": "Create account & join",
     "title": "Create account",
     "descJoin": "Verify your email, then accept the invitation to join your team.",
-    "desc": "Get started with CRM Template for WhatsApp",
+    "desc": "Get started with Everloop",
     "fullNameLabel": "Full name",
     "fullNamePlaceholder": "John Doe",
     "emailLabel": "Email",
@@ -2340,7 +2431,10 @@
       "placeholder": "Type a customer message…",
       "notConfigured": "No agent configured yet — finish Setup first.",
       "noReply": "Couldn't get a reply.",
-      "unreachable": "Couldn't reach the agent."
+      "unreachable": "Couldn't reach the agent.",
+      "runSample": "Run sample",
+      "sampleQuestion": "When do you close today?",
+      "syntheticDesc": "Google AI Studio uses a fictional coffee-shop conversation for this test."
     },
     "usage": {
       "title": "Token usage",
@@ -2497,6 +2591,12 @@
     }
   },
   "LibErrors": {
+    "marketingConsent": {
+      "template_unavailable": "This WhatsApp template is unavailable. Sync templates and select an approved version.",
+      "marketing_opt_out": "This recipient opted out of WhatsApp marketing.",
+      "marketing_consent_required": "Record the recipient’s WhatsApp marketing opt-in before sending.",
+      "marketing_consent_unavailable": "Could not verify WhatsApp marketing permission. Try again."
+    },
     "upload": {
       "notSignedIn": "Not signed in.",
       "accountUnresolved": "Could not resolve your account."
@@ -2552,8 +2652,14 @@
       "none": "none",
       "notConfigured": "WhatsApp not configured for this account",
       "dbInsertFailed": "sent to Meta but DB insert failed: {message}",
+      "requestKeyInvalid": "Use an idempotency key of 1–128 letters, digits or . _ : - characters.",
+      "requestKeyConflict": "This idempotency key already belongs to a different send.",
+      "requestPreviouslyRejected": "This send was already rejected. Review the message before retrying.",
+      "deliveryUncertain": "Delivery could not be confirmed. Check the conversation before sending again.",
+      "replyWindowClosed": "The 24-hour reply window is closed. Use an approved WhatsApp template.",
       "conversationLookupFailed": "conversation lookup failed: {message}",
-      "conversationNotFound": "conversation not found for this account"
+      "conversationNotFound": "conversation not found for this account",
+      "deliveryConfirmed": "WhatsApp confirmed the send. Its local message record is unavailable, so Everloop held the resend."
     },
     "engine": {
       "needsContact": "{step} needs a contact",
@@ -2762,6 +2868,7 @@
         "notFound": "Invitation not found",
         "loadFailed": "Failed to load invitations",
         "roleInvalid": "'role' must be one of admin, agent, viewer",
+        "originNotConfigured": "Set NEXT_PUBLIC_SITE_URL to your Everloop HTTPS origin before creating invitations.",
         "labelTooLong": "Label must be {max} characters or fewer",
         "createFailed": "Failed to create invitation"
       },
@@ -2868,7 +2975,7 @@
       "wabaIdDigits": "WhatsApp Business Account ID must contain only digits — copy it from Meta → WhatsApp → API Setup.",
       "pinDigits": "PIN must be exactly 6 digits.",
       "validateFailed": "Failed to validate configuration",
-      "numberLinkedElsewhere": "This WhatsApp phone number is already linked to another account on this instance. Each phone number can only be connected to one wacrm user.",
+      "numberLinkedElsewhere": "This WhatsApp phone number is already linked to another account on this instance. Each phone number can only be connected to one Everloop user.",
       "encryptFailed": "Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.",
       "updateFailed": "Failed to update configuration",
       "saveFailed": "Failed to save configuration",
@@ -2923,5 +3030,24 @@
       "metaApiStatus": "Meta API error: {status}",
       "syncFailed": "Failed to sync templates"
     }
+  },
+  "Mobile": {
+    "home": "Home",
+    "inbox": "Inbox",
+    "contacts": "Contacts",
+    "campaigns": "Campaigns",
+    "more": "More",
+    "navigation": "Main navigation",
+    "offline": "You’re offline. Reconnect to send and receive messages.",
+    "installTitle": "Everloop mobile app",
+    "installDescription": "Open Everloop from your Home Screen.",
+    "installAction": "Install Everloop",
+    "installHelpAction": "Installation help",
+    "installHelp": "On iPhone, open Everloop in Safari and choose Share, then Add to Home Screen. On Android, open the Chrome menu and choose Install app or Add to Home screen.",
+    "pushDescription": "Get an alert when a customer replies to a conversation assigned to you. Lock-screen alerts show only Everloop’s name.",
+    "pushOn": "Turn on device alerts",
+    "pushOff": "Turn off device alerts",
+    "pushPermission": "Allow notifications in your browser or device settings.",
+    "pushError": "Could not update this device’s alerts."
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { EverloopMark } from "@/components/layout/everloop-mark";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -15,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, UsersRound } from "lucide-react";
+import { UsersRound } from "lucide-react";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -36,6 +37,8 @@ function LoginPageInner() {
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
+  const inboxAfterLogin = searchParams.get("openInbox") === "1";
+  const conversationAfterLogin = searchParams.get("c");
   const t = useTranslations("LoginPage");
   // Set by /auth/callback when an emailed link (confirmation, password
   // reset) could not be turned into a session — see src/lib/auth/callback.ts.
@@ -79,19 +82,21 @@ function LoginPageInner() {
     // reload the invite-accept flow already uses in join/[token].
     const destination = inviteToken
       ? `/join/${encodeURIComponent(inviteToken)}`
-      : "/dashboard";
+      : inboxAfterLogin
+        ? "/inbox" + (conversationAfterLogin && /^[0-9a-f-]{36}$/i.test(conversationAfterLogin) ? `?c=${conversationAfterLogin}` : "")
+        : "/dashboard";
     window.location.href = destination;
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
+        <CardHeader className="justify-items-center text-center">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             {inviteToken ? (
               <UsersRound className="h-6 w-6 text-primary" />
             ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
+              <EverloopMark className="size-12" />
             )}
           </div>
           <CardTitle className="text-xl text-foreground">

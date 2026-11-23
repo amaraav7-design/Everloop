@@ -8,16 +8,21 @@ const h = vi.hoisted(() => ({
   dispatchInboundToAiReply: vi.fn(),
   dispatchWebhookEvent: vi.fn(),
   applyMessageStatus: vi.fn(),
+  enqueueReceipt: vi.fn(),
+  processReceipt: vi.fn(),
   state: {
     // Result the message upsert's .select() resolves to. A genuine insert
     // returns the row; a replayed delivery conflicts and returns [].
     messageUpsertResult: [{ id: 'msg-1' }] as { id: string }[],
     firstInboundUnclaimed: true,
+    dispatch: null as { first_inbound: boolean; new_contact: boolean; new_conversation: boolean } | null,
+    originalPayload: null as object | null,
+    optOutEvents: [] as Record<string, unknown>[],
     firstInboundClaims: 0,
     /** Row `lookupInternalIdByMetaId` resolves for a `context.id`. */
     replyContextParent: null as { id: string } | null,
     conversation: { id: 'conv-1', unread_count: 0, account_id: 'acc-1' },
-    upsertCalls: [] as { row: Record<string, unknown>; options: unknown }[],
+    inboundWrites: [] as Record<string, unknown>[],
     rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
     afterCallbacks: [] as (() => Promise<void> | void)[],
     automationStarted: 0,
@@ -94,21 +99,7 @@ vi.mock('@supabase/supabase-js', () => ({
                 }),
               }),
             }),
-            update: () => ({
-              eq: () => ({
-                is: () => ({
-                  select: () => {
-                    h.state.firstInboundClaims++
-                    const won = h.state.firstInboundUnclaimed
-                    h.state.firstInboundUnclaimed = false
-                    return Promise.resolve({
-                      data: won ? [{ id: 'conv-1' }] : [],
-                      error: null,
-                    })
-                  },
-                }),
-              }),
-            }),
+
           }
         case 'broadcast_recipients':
           return {
@@ -193,24 +184,50 @@ vi.mock('@supabase/supabase-js', () => ({
                 }),
               }),
             }),
-            // Idempotent insert: upsert(...).select('id')
-            upsert: (row: Record<string, unknown>, options: unknown) => {
-              h.state.upsertCalls.push({ row, options })
-              return {
-                select: () =>
-                  Promise.resolve({
-                    data: h.state.messageUpsertResult,
-                    error: null,
-                  }),
-              }
-            },
+
           }
+        case 'whatsapp_inbound_dispatches':
+          return {
+            update: (patch: Record<string, unknown>) => ({
+              eq: () => patch.completed_at
+                ? Promise.resolve({ error: null })
+                : {
+                    is: () => ({
+                      select: () => ({
+                        maybeSingle: async () => {
+                          const data = h.state.dispatch
+                          h.state.dispatch = null
+                          return { data, error: null }
+                        },
+                      }),
+                    }),
+                  },
+            }),
+          }
+        case 'whatsapp_marketing_consent_events':
+          return { upsert: async (rows: Record<string, unknown>[]) => {
+            h.state.optOutEvents.push(...rows)
+            return { error: null }
+          } }
         default:
           throw new Error(`unexpected table: ${table}`)
       }
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       h.state.rpcCalls.push({ name, args })
+      if (name === 'persist_whatsapp_inbound') {
+        h.state.inboundWrites.push(args.p_message as Record<string, unknown>)
+        if (h.state.messageUpsertResult.length) {
+          h.state.firstInboundClaims++
+          h.state.dispatch = {
+            first_inbound: h.state.firstInboundUnclaimed,
+            new_contact: Boolean(args.p_new_contact),
+            new_conversation: Boolean(args.p_new_conversation),
+          }
+          h.state.firstInboundUnclaimed = false
+        }
+        return Promise.resolve({ data: 'msg-1', error: null })
+      }
       return Promise.resolve({ data: null, error: null })
     },
     // Service-role Storage, used by the inbound-media mirror (#466).
@@ -232,6 +249,11 @@ vi.mock('@supabase/supabase-js', () => ({
       },
     },
   }),
+}))
+
+vi.mock('@/lib/whatsapp/webhook-queue', () => ({
+  enqueueWebhookReceipt: h.enqueueReceipt,
+  processWebhookReceipt: h.processReceipt,
 }))
 
 vi.mock('@/lib/whatsapp/encryption', () => ({
@@ -367,7 +389,14 @@ beforeEach(() => {
   h.state.firstInboundClaims = 0
   h.state.replyContextParent = null
   h.state.conversation = { id: 'conv-1', unread_count: 0, account_id: 'acc-1' }
-  h.state.upsertCalls = []
+  h.state.inboundWrites = []
+  h.state.dispatch = null
+  h.state.optOutEvents = []
+  h.enqueueReceipt.mockImplementation(async (_db, _raw, body) => {
+    h.state.originalPayload = body
+    return 'receipt-key'
+  })
+  h.processReceipt.mockImplementation(async (_db, process) => process(h.state.originalPayload))
   h.state.rpcCalls = []
   h.state.afterCallbacks = []
   h.state.automationStarted = 0
@@ -415,28 +444,22 @@ describe('inbound webhook: idempotent insert (#367)', () => {
   it('a genuine first delivery persists once and fans out downstream', async () => {
     await runWebhook()
 
-    // Inserted via upsert with the (conversation_id, message_id) conflict
-    // target — not a bare insert.
-    expect(h.state.upsertCalls).toHaveLength(1)
-    expect(h.state.upsertCalls[0].options).toMatchObject({
-      onConflict: 'conversation_id,message_id',
-      ignoreDuplicates: true,
-    })
+    expect(h.state.inboundWrites).toHaveLength(1)
     // Downstream side effects ran exactly once.
-    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.state.rpcCalls.filter(call => call.name === 'persist_whatsapp_inbound')).toHaveLength(1)
     expect(h.dispatchInboundToFlows).toHaveBeenCalledTimes(1)
     expect(h.dispatchWebhookEvent).toHaveBeenCalledTimes(1)
   })
 
   it('a replayed delivery is a no-op: no unread bump, no fan-out', async () => {
-    // Upsert hits the unique index and returns no row.
+    // The message already has a claimed dispatch.
     h.state.messageUpsertResult = []
 
     await runWebhook()
 
-    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(h.state.inboundWrites).toHaveLength(1)
     // None of the downstream side effects fire on a replay.
-    expect(h.state.rpcCalls).toHaveLength(0)
+    expect(h.state.rpcCalls.filter(call => call.name === 'persist_whatsapp_inbound')).toHaveLength(1)
     expect(h.dispatchInboundToFlows).not.toHaveBeenCalled()
     expect(h.runAutomationsForTrigger).not.toHaveBeenCalled()
     expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
@@ -448,11 +471,32 @@ describe('inbound webhook: atomic unread bump (#369)', () => {
   it('increments unread through the DB-side RPC, not a read-modify-write', async () => {
     await runWebhook()
 
-    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.state.rpcCalls.filter(call => call.name === 'persist_whatsapp_inbound')).toHaveLength(1)
     expect(h.state.rpcCalls[0]).toMatchObject({
-      name: 'bump_conversation_on_inbound',
-      args: { p_conversation_id: 'conv-1' },
+      name: 'persist_whatsapp_inbound',
+      args: { p_account_id: 'acc-1', p_message: { conversation_id: 'conv-1' } },
     })
+  })
+})
+
+describe('inbound webhook receipt and opt-out', () => {
+  it('returns 503 without scheduling work if persistence is unavailable', async () => {
+    h.enqueueReceipt.mockRejectedValueOnce(new Error('database unavailable'))
+    const response = await POST(inboundRequest())
+    expect(response).toMatchObject({ init: { status: 503 } })
+    expect(h.state.afterCallbacks).toHaveLength(0)
+  })
+
+  it('persists a STOP request and does not trigger flows, automations or AI', async () => {
+    await runWebhook({ ...TEXT_MESSAGE, text: { body: ' STOP. ' } })
+    expect(h.state.optOutEvents).toEqual([expect.objectContaining({
+      account_id: 'acc-1', recipient_key: 'phone:15551230000',
+      state: 'opted_out', whatsapp_message_id: TEXT_MESSAGE.id,
+    })])
+    expect(h.state.inboundWrites).toHaveLength(1)
+    expect(h.dispatchInboundToFlows).not.toHaveBeenCalled()
+    expect(h.runAutomationsForTrigger).not.toHaveBeenCalled()
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
   })
 })
 
@@ -473,8 +517,8 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
   it('stores the tap as an interactive reply, not an unsupported message', async () => {
     await runWebhook(templateButtonTap)
 
-    expect(h.state.upsertCalls).toHaveLength(1)
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites).toHaveLength(1)
+    expect(h.state.inboundWrites[0]).toMatchObject({
       content_type: 'interactive',
       content_text: 'Yes, interested',
       interactive_reply_id: 'YES_INTERESTED',
@@ -510,7 +554,7 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
       button: { text: 'Track my order' },
     })
 
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites[0]).toMatchObject({
       content_type: 'interactive',
       content_text: 'Track my order',
       interactive_reply_id: 'Track my order',
@@ -535,7 +579,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
     expect(h.state.storageUploads[0].path).toBe(
       'account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
     )
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites[0]).toMatchObject({
       media_url:
         'https://cdn.test/chat-media/account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
       // Meta's MIME type used to be discarded outright (`void mediaType`).
@@ -550,8 +594,8 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
 
     // The message still lands, and it still lands with a usable URL —
     // the mirror failing must never cost us the message.
-    expect(h.state.upsertCalls).toHaveLength(1)
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites).toHaveLength(1)
+    expect(h.state.inboundWrites[0]).toMatchObject({
       media_url: '/api/whatsapp/media/1234567890123456',
       media_type: 'image/jpeg',
     })
@@ -562,7 +606,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
 
     await runWebhook(IMAGE_MESSAGE)
 
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites[0]).toMatchObject({
       media_url: '/api/whatsapp/media/1234567890123456',
     })
   })
@@ -588,7 +632,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
 
     expect(mockDownloadMedia).not.toHaveBeenCalled()
     expect(h.state.storageUploads).toHaveLength(0)
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites[0]).toMatchObject({
       media_url: '/api/whatsapp/media/999',
       media_type: 'application/pdf',
     })
@@ -630,7 +674,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
 
     expect(mockDownloadMedia).not.toHaveBeenCalled()
     expect(h.state.storageUploads).toHaveLength(0)
-    expect(h.state.upsertCalls[0].row).toMatchObject({
+    expect(h.state.inboundWrites[0]).toMatchObject({
       media_url: '/api/whatsapp/media/1234567890123456',
       // Still recorded — the MIME type costs nothing and makes the
       // download name right even for proxied media.
@@ -651,7 +695,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
 
     expect(mockGetMediaUrl).not.toHaveBeenCalled()
     expect(h.state.storageUploads).toHaveLength(0)
-    expect(h.state.upsertCalls[0].row).toMatchObject({ media_type: null })
+    expect(h.state.inboundWrites[0]).toMatchObject({ media_type: null })
   })
 })
 
@@ -716,7 +760,7 @@ describe('inbound webhook: business-scoped user IDs (#519)', () => {
       name: 'Sheena Nelson',
     })
     // The message still lands in the thread.
-    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(h.state.inboundWrites).toHaveLength(1)
   })
 
   it('never looks the sender up by phone when there is no phone', async () => {
@@ -826,7 +870,7 @@ describe('inbound webhook: business-scoped user IDs (#519)', () => {
     )
 
     expect(h.state.contactInserts).toHaveLength(0)
-    expect(h.state.upsertCalls).toHaveLength(0)
+    expect(h.state.inboundWrites).toHaveLength(0)
     // Still a 200 — Meta must not be told to retry a payload we can
     // never process.
     expect(
@@ -844,7 +888,7 @@ describe('inbound webhook: business-scoped user IDs (#519)', () => {
     )
     expect(h.state.contactInserts).toHaveLength(0)
     expect(h.state.contactUpdates).toHaveLength(0)
-    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(h.state.inboundWrites).toHaveLength(1)
   })
 })
 
@@ -908,7 +952,7 @@ describe('template-lifecycle webhooks: WABA id is threaded to the handler (#534)
       wabaId: 'WABA-1',
     })
     // A template event must not fall through to the messaging branch.
-    expect(h.state.upsertCalls).toHaveLength(0)
+    expect(h.state.inboundWrites).toHaveLength(0)
   })
 })
 

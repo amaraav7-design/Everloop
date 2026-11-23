@@ -19,6 +19,16 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [synthetic, setSynthetic] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/ai/config', { signal: controller.signal, cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then(config => { if (!controller.signal.aborted) setSynthetic(config?.provider === 'google_ai_studio'); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,7 +36,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   }, [turns, sending]);
 
   const send = async () => {
-    const text = input.trim();
+    const text = synthetic ? t('sampleQuestion') : input.trim();
     if (!text || sending) return;
 
     const next: Turn[] = [...turns, { role: 'user', content: text }];
@@ -39,7 +49,8 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         // Send only role+content — the server ignores anything else.
         body: JSON.stringify({
-          messages: next.map((t) => ({ role: t.role, content: t.content })),
+          messages: synthetic ? [] : next.map((t) => ({ role: t.role, content: t.content })),
+          sample: synthetic,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -110,7 +121,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
             <Bot className="mb-2 h-8 w-8 text-muted-foreground/60" />
             <p>{t('emptyTitle')}</p>
             <p className="mt-1 text-xs">
-              {t('emptyDesc')}
+              {t(synthetic ? 'syntheticDesc' : 'emptyDesc')}
             </p>
             {onGoToSetup && (
               <Button
@@ -172,6 +183,11 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
       </div>
 
       {/* Composer */}
+      {synthetic ? (
+        <div className="border-t border-border p-3">
+          <Button onClick={send} disabled={sending}>{t('runSample')}</Button>
+        </div>
+      ) : (
       <div className="flex items-end gap-2 border-t border-border p-3">
         <textarea
           value={input}
@@ -194,6 +210,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
           )}
         </Button>
       </div>
+      )}
     </div>
   );
 }

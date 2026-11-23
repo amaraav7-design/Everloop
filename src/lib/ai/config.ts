@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import type { AiConfig } from './types'
+import type { AiConfig, AiProvider } from './types'
+import { isManagedProvider, managedAutoReplyEnabled } from './managed-providers'
+import { decryptAiConnection, readAiConnection } from './provider-connections'
 
 interface AiConfigRow {
-  provider: 'openai' | 'anthropic' | 'openai_compatible'
+  provider: AiProvider
   model: string
   base_url: string | null
   api_key: string
@@ -51,7 +53,8 @@ export async function loadAiConfig(
   // Defensive: the column is NOT NULL, but a partial write / manual DB
   // edit could leave it empty. Treat a missing key as "not configured"
   // rather than letting decrypt() throw on null.
-  if (!row.api_key) return null
+  const connection = isManagedProvider(row.provider) ? await readAiConnection(accountId, row.provider) : null
+  if (isManagedProvider(row.provider) ? !connection : !row.api_key) return null
 
   // The embeddings key is optional and independent of the chat key —
   // a corrupt/undecryptable one should downgrade to lexical KB, not
@@ -74,10 +77,12 @@ export async function loadAiConfig(
     provider: row.provider,
     model: row.model,
     baseUrl: row.base_url,
-    apiKey: decrypt(row.api_key),
+    apiKey: connection ? decryptAiConnection(connection.api_key) : decrypt(row.api_key),
+    ...(connection ? { freeOnly: connection.free_only } : {}),
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
-    autoReplyEnabled: row.auto_reply_enabled,
+    autoReplyEnabled: row.auto_reply_enabled && (!isManagedProvider(row.provider) ||
+      (row.provider === 'openrouter' && managedAutoReplyEnabled(accountId))),
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,

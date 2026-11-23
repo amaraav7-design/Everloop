@@ -4,8 +4,8 @@
 // The headline public endpoint (issue #245). Unlike the dashboard's
 // `/api/whatsapp/send` (which takes an internal `conversation_id`),
 // this takes a phone number — what an external automation actually
-// has — resolves-or-creates the contact + conversation, then runs the
-// same shared send core.
+// has. Template sends can create the contact and conversation. Free-form
+// sends resolve an existing conversation with an open reply window.
 //
 // Auth: API key with the `messages:send` scope. Account context (and
 // the service-role client) come from `requireApiKey`.
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       string,
       unknown
     > | null;
-    if (!body || typeof body !== 'object') {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return fail('bad_request', 'Request body must be a JSON object', 400);
     }
 
@@ -102,7 +102,8 @@ export async function POST(request: Request) {
       ctx.supabase,
       ctx.accountId,
       to,
-      typeof body.name === 'string' ? body.name : null
+      typeof body.name === 'string' ? body.name : null,
+      { requireOpenWindow: type !== 'template' },
     );
 
     const result = await sendMessageToConversation(
@@ -120,6 +121,7 @@ export async function POST(request: Request) {
         templateParams,
         templateMessageParams,
         interactivePayload,
+        requestKey: request.headers.get('Idempotency-Key') ?? undefined,
         replyToMessageId:
           typeof body.reply_to_message_id === 'string'
             ? body.reply_to_message_id

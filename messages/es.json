@@ -3,7 +3,7 @@
     "titleAccept": "Inicia sesión para aceptar",
     "titleWelcome": "Bienvenido de nuevo",
     "descAccept": "Inicia sesión y te llevaremos a la invitación.",
-    "descWelcome": "Inicia sesión en tu cuenta",
+    "descWelcome": "Inicia sesión en tu cuenta de Everloop",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "Contraseña",
@@ -17,14 +17,14 @@
     "linkInvalid": "No se pudo iniciar sesión con ese enlace. Si estabas confirmando tu correo, es posible que ya esté verificado; inicia sesión abajo. Para restablecer la contraseña, pide un enlace nuevo y ábrelo en el mismo navegador desde el que lo solicitaste."
   },
   "Sidebar": {
-    "title": "Plantilla de CRM para WhatsApp",
+    "title": "Everloop",
     "primaryNav": "Principal",
     "dashboard": "Panel",
     "inbox": "Bandeja de entrada",
     "notifications": "Notificaciones",
     "contacts": "Contactos",
     "pipelines": "Pipelines",
-    "broadcasts": "Difusiones",
+    "broadcasts": "Campañas",
     "automations": "Automatizaciones",
     "flows": "Flujos",
     "aiAgents": "Agentes de IA",
@@ -49,7 +49,7 @@
     "notifications": "Notificaciones",
     "contacts": "Contactos",
     "pipelines": "Pipelines",
-    "broadcasts": "Difusiones",
+    "broadcasts": "Campañas",
     "automations": "Automatizaciones",
     "settings": "Configuración",
     "openMenu": "Abrir menú",
@@ -330,6 +330,7 @@
   },
   "Inbox": {
     "page": {
+      "mobileContactDetails": "Datos del contacto",
       "whatsappNotConnected": "WhatsApp® no está conectado. Ve a Configuración para conectar tu cuenta."
     },
     "conversationList": {
@@ -348,7 +349,10 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "loadMore": "Cargar más",
+      "pageError": "No se pudieron cargar las conversaciones.",
+      "retryPage": "Reintentar"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",
@@ -395,10 +399,10 @@
     },
     "composer": {
       "draftHint": "Toca ✨ para redactar una respuesta con IA; puedes editarla antes de enviarla",
-      "sessionExpiredHint": "La sesión de 24 horas expiró. Usa una plantilla para retomar el contacto.",
+      "sessionExpiredHint": "Puedes responder libremente durante las 24 horas posteriores a un mensaje del contacto. Usa una plantilla aprobada para iniciar el contacto.",
       "templates": "Plantillas",
       "readOnlyPlaceholder": "Solo lectura: los observadores pueden navegar, pero no responder",
-      "sessionExpiredPlaceholder": "Sesión expirada - usa una plantilla",
+      "sessionExpiredPlaceholder": "Usa una plantilla para iniciar el contacto",
       "typeMessagePlaceholder": "Escribe un mensaje... (Shift+Enter para nueva línea)",
       "readOnlyTitle": "Solo lectura: tu rol no puede enviar mensajes",
       "recording": "Grabando… {current} / {max}",
@@ -420,7 +424,7 @@
       "draftWithAI": "Redactar una respuesta con IA",
       "addCaption": "Agregar una descripción…",
       "removeAttachment": "Quitar adjunto",
-      "moreActions": "Más",
+      "moreActions": "Más acciones del mensaje",
       "interactiveMessage": "Mensaje interactivo",
       "quickReplies": "Respuestas rápidas",
       "quickRepliesEmpty": "Aún no hay respuestas rápidas. Agrega algunas en Configuración → Respuestas rápidas.",
@@ -531,6 +535,34 @@
     }
   },
   "Contacts": {
+    "marketingConsent": {
+      "title": "Permiso de marketing por WhatsApp",
+      "unknown": "Sin permiso registrado",
+      "opted_in": "Suscrito",
+      "opted_out": "Dado de baja",
+      "loading": "Cargando permiso…",
+      "loadFailed": "No se pudo cargar el permiso de marketing.",
+      "saveFailed": "No se pudo actualizar el permiso de marketing.",
+      "contactUnavailable": "Contacto no disponible.",
+      "addressUnavailable": "Añade un número válido de WhatsApp para registrar el permiso.",
+      "recordOptIn": "Registrar permiso",
+      "stopMarketing": "Detener marketing",
+      "source": "Origen del permiso",
+      "selectSource": "Elige un origen",
+      "date": "Fecha y hora de recepción",
+      "evidence": "Referencia de evidencia",
+      "evidenceHelp": "Usa el ID de un formulario o una nota breve. Evita los datos confidenciales.",
+      "cancel": "Cancelar",
+      "invalidEvidence": "Indica el origen, la fecha y hora pasadas y una referencia de evidencia.",
+      "sources": {
+        "website": "Sitio web",
+        "checkout": "Proceso de compra",
+        "whatsapp": "WhatsApp",
+        "in_person": "En persona",
+        "other": "Otro",
+        "csv": "Importación CSV"
+      }
+    },
     "page": {
       "title": "Contactos",
       "subtitle": "Administra tu lista de contactos. {count} contactos en total.",
@@ -679,6 +711,10 @@
       "networkError": "error de red"
     },
     "importModal": {
+      "consentCsvHint": "Para registrar permisos documentados, incluye whatsapp_opt_in_at en ISO 8601 con zona horaria y whatsapp_opt_in_evidence con una referencia.",
+      "resultConsentRecorded": "{count} permisos de marketing registrados",
+      "resultWithoutConsent": "{count} importados sin un nuevo registro de permiso",
+      "toastConsentWarning": "No se registraron algunos permisos importados. Revisa esos contactos antes del envío.",
       "title": "Importar contactos",
       "desc": "Sube un CSV con una columna <phoneCode>phone</phoneCode> obligatoria. Opcionales: <nameCode>name</nameCode>, <emailCode>email</emailCode>, <companyCode>company</companyCode>, <tagsCode>tags</tagsCode> (separadas por comas; pon entre comillas las celdas con varias etiquetas).",
       "uploadDropzone": "Haz clic para elegir un archivo CSV",
@@ -778,7 +814,8 @@
         "proposalSent": "Propuesta enviada",
         "negotiation": "Negociación",
         "won": "Ganado"
-      }
+      },
+      "mobileStage": "Etapa de {deal}"
     },
     "board": {
       "dropDealHere": "Suelta un negocio aquí",
@@ -874,11 +911,11 @@
   },
   "Broadcasts": {
     "page": {
-      "title": "Difusiones",
+      "title": "Campañas",
       "subtitle": "Envía mensajes masivos a tus contactos usando plantillas aprobadas.",
-      "newBroadcast": "Nueva difusión",
-      "noBroadcastsYet": "Aún no hay difusiones",
-      "createFirst": "Crea tu primera difusión para llegar a tus contactos a gran escala.",
+      "newBroadcast": "Nueva campaña",
+      "noBroadcastsYet": "Todavía no hay campañas",
+      "createFirst": "Crea tu primera campaña con una plantilla de WhatsApp aprobada.",
       "table": {
         "name": "Nombre",
         "template": "Plantilla",
@@ -890,7 +927,8 @@
       },
       "errorLoad": "Error al cargar las difusiones",
       "broadcastInProgress": "Difusión en curso",
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "mobileDelivery": "{delivered} de {total} entregados"
     },
     "status": {
       "draft": "Borrador",
@@ -902,7 +940,13 @@
       "delivered": "Entregado",
       "read": "Leído",
       "replied": "Respondido",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "queued": "En cola",
+      "paused": "En pausa",
+      "canceled": "Cancelada",
+      "excluded": "Excluido",
+      "uncertain": "Entrega sin confirmar",
+      "partial": "Completada con incidencias"
     },
     "detail": {
       "backToBroadcasts": "Volver a difusiones",
@@ -952,10 +996,29 @@
       "toastResumeStartedCapped": "Enviando a {count} destinatarios en segundo plano. Otros {remaining} necesitarán otra ejecución.",
       "toastResumeFailed": "No se pudo reanudar: {error}",
       "unknownError": "Error desconocido",
-      "unknownContact": "Desconocido"
+      "unknownContact": "Desconocido",
+      "control": {
+        "scheduledFor": "Programada para {date}",
+        "pending": "{count} pendientes",
+        "excluded": "{count} excluidos",
+        "uncertain": "{count} pendientes de confirmación",
+        "pause": "Pausar",
+        "resume": "Reanudar",
+        "cancel": "Cancelar campaña",
+        "confirmCancel": "¿Cancelar los envíos restantes? Los mensajes en curso podrían enviarse.",
+        "keep": "Mantener campaña",
+        "error": "No se pudo cambiar la campaña.",
+        "reply": "Respuesta",
+        "attribution": "Atribución",
+        "direct": "Directa",
+        "inferred": "Inferida",
+        "exportFailed": "No se pudieron exportar los destinatarios.",
+        "previous": "Anterior",
+        "next": "Siguiente"
+      }
     },
     "new": {
-      "title": "Nueva difusión",
+      "title": "Nueva campaña",
       "subtitle": "Crea y envía un mensaje masivo a tus contactos.",
       "steps": {
         "template": "Plantilla",
@@ -968,7 +1031,10 @@
       "toastNotLinked": "Tu perfil no está vinculado a una cuenta.",
       "toastFailedDraft": "Error al guardar el borrador: {error}",
       "toastDraftSaved": "Borrador guardado",
-      "broadcastFailed": "Falló la difusión"
+      "broadcastFailed": "Falló la difusión",
+      "draftUnavailable": "Este borrador no está disponible.",
+      "loadingDraft": "Cargando borrador…",
+      "testQueued": "Prueba en cola."
     },
     "wizard": {
       "next": "Siguiente",
@@ -1055,7 +1121,9 @@
           "email": "Correo"
         },
         "sampleName": "Juan Pérez",
-        "sampleCompany": "Empresa Ejemplo S.A."
+        "sampleCompany": "Empresa Ejemplo S.A.",
+        "headerValue": "Texto variable del encabezado",
+        "buttonSuffix": "Sufijo del enlace de «{label}»"
       },
       "scheduleSend": {
         "title": "Revisar y enviar",
@@ -1073,14 +1141,31 @@
         "variablesMapped": "{count} asignadas",
         "saveDraft": "Guardar como borrador",
         "sendNow": "Enviar difusión",
-        "sending": "Enviando...",
+        "sending": "Preparando campaña…",
         "preparing": "Preparando...",
         "progressDesc": "Procesando {current} de {total} destinatarios...",
         "toastFailedPreview": "Error al cargar los datos de la vista previa",
-        "estimatedReach": "Alcance estimado",
+        "estimatedReach": "Destinatarios aptos",
         "language": "Idioma",
         "confirmTitle": "Confirmar difusión",
-        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer."
+        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer.",
+        "schedule": "Programar",
+        "timing": "Hora de envío",
+        "localTime": "Fecha y hora ({zone})",
+        "invalidTime": "Elige una hora futura válida.",
+        "retryPreview": "Volver a cargar la vista previa",
+        "noEligible": "Ningún destinatario cumple los requisitos de esta campaña.",
+        "exclusions": {
+          "invalid_phone": "{count} números no válidos",
+          "marketing_opt_out": "{count} bajas",
+          "marketing_consent_required": "{count} sin consentimiento de marketing",
+          "invalid_template_parameters": "{count} con valores de plantilla incompletos",
+          "duplicates": "{count} destinatarios duplicados"
+        },
+        "test": "Enviar prueba",
+        "testHint": "Elige un contacto de prueba guardado que pueda recibir esta plantilla.",
+        "testPhone": "Número de prueba",
+        "testError": "No se pudo programar la prueba."
       }
     },
     "sending": {
@@ -1667,7 +1752,7 @@
       "done": "Listo",
       "dialogTitle": "Invitar a un compañero",
       "networkError": "No se pudo conectar con el servidor. ¿Intentar de nuevo?",
-      "fallbackAccountName": "nuestra cuenta de wacrm",
+      "fallbackAccountName": "nuestra cuenta de Everloop",
       "dialogDesc": "Genera un enlace de invitación de un solo uso. Compártelo por WhatsApp, Slack o el canal que prefieras; no se necesita servicio de correo.",
       "roleLabel": "Rol",
       "validForLabel": "Enlace válido por",
@@ -1684,7 +1769,7 @@
       "labelTooLong": "La etiqueta debe tener {max} caracteres o menos",
       "copied": "Enlace de invitación copiado",
       "clipboardBlocked": "Portapapeles bloqueado: copia el enlace manualmente",
-      "whatsappMessage": "Únete a {accountName} en wacrm con este enlace (válido por {expiresInDays} días): {url}",
+      "whatsappMessage": "Únete a {accountName} en Everloop con este enlace (válido por {expiresInDays} días): {url}",
       "createFailed": "No se pudo crear la invitación"
     },
     "tagsAndFields": {
@@ -1804,8 +1889,8 @@
       "saveResubmit": "Guardar y reenviar",
       "submitApproval": "Enviar para aprobación",
       "deleteDialogTitle": "¿Eliminar plantilla?",
-      "deleteMetaDesc": "\"{name}\" se eliminará de Meta y de wacrm. Las difusiones activas que usen esta plantilla empezarán a fallar en su próximo envío. No se puede deshacer.",
-      "deleteLocalDesc": "\"{name}\" se eliminará de wacrm. Nunca se envió a Meta, así que no hace falta limpieza remota.",
+      "deleteMetaDesc": "\"{name}\" se eliminará de Meta y de Everloop. Las difusiones activas que usen esta plantilla empezarán a fallar en su próximo envío. No se puede deshacer.",
+      "deleteLocalDesc": "\"{name}\" se eliminará de Everloop. Nunca se envió a Meta, así que no hace falta limpieza remota.",
       "deleting": "Eliminando…",
       "delete": "Eliminar",
       "toastLoadFailed": "Error al cargar las plantillas",
@@ -1857,7 +1942,7 @@
       "notConnected": "No conectado",
       "connectedDesc": "Tu token de acceso se autentica con Meta. Revisa el estado de registro abajo para saber si los webhooks están realmente conectados.",
       "notConnectedDesc": "Configura abajo tus credenciales de la API de Meta para conectar tu cuenta de WhatsApp Business.",
-      "registered": "Registrado: Meta entregará los eventos a wacrm",
+      "registered": "Registrado: Meta entregará los eventos a Everloop",
       "notRegistered": "No registrado: Meta no entregará eventos",
       "verifyWithMeta": "Verificar con Meta",
       "subscribedSince": "Suscrito desde {date}. Haz clic en Verificar con Meta si los eventos dejan de llegar.",
@@ -1882,7 +1967,7 @@
       "twoStepPin": "PIN de verificación en dos pasos",
       "optional": "(opcional)",
       "pinPlaceholder": "PIN de 6 dígitos del Administrador de WhatsApp de Meta",
-      "pinHint": "Solo se necesita para recibir mensajes entrantes en un número de producción. Configúralo en Meta Business Manager → Cuentas de WhatsApp → Números de teléfono → Verificación en dos pasos y pégalo aquí para que wacrm pueda suscribir el número; de lo contrario, Meta envía los eventos entrantes a la última app que reclamó el número (el síntoma que afecta a segundos números bajo una WABA compartida). Los números de prueba de Meta no tienen PIN y ya vienen registrados: déjalo en blanco para ellos. Dejarlo en blanco también mantiene intacto un registro existente.",
+      "pinHint": "Solo se necesita para recibir mensajes entrantes en un número de producción. Configúralo en Meta Business Manager → Cuentas de WhatsApp → Números de teléfono → Verificación en dos pasos y pégalo aquí para que Everloop pueda suscribir el número; de lo contrario, Meta envía los eventos entrantes a la última app que reclamó el número (el síntoma que afecta a segundos números bajo una WABA compartida). Los números de prueba de Meta no tienen PIN y ya vienen registrados: déjalo en blanco para ellos. Dejarlo en blanco también mantiene intacto un registro existente.",
       "webhookTitle": "Configuración del webhook",
       "webhookDesc": "Usa esta URL como callback del webhook en el panel de la app de Meta.",
       "webhookUrl": "URL de callback del webhook",
@@ -2130,7 +2215,7 @@
     },
     "aiConfig": {
       "title": "Configuración del agente",
-      "description": "Usa tu propia clave de OpenAI, Anthropic o de una API compatible con OpenAI. wacrm llama al proveedor directamente con tu clave, sin cargos de IA por puesto, y tus datos siguen siendo tuyos. Esto impulsa las respuestas redactadas por IA, el bot de respuesta automática y el Playground.",
+      "description": "Usa tus propias claves de IA. Los borradores y las pruebas se envían al proveedor elegido. Las claves de OpenRouter y Google AI Studio se guardan por separado.",
       "adminOnlyConfig": "Solo los administradores y propietarios pueden cambiar la configuración de IA.",
       "loadFailed": "Error al cargar la configuración de IA",
       "providerAndKey": "Proveedor y clave",
@@ -2170,7 +2255,13 @@
       "providerOpenAiCompatible": "API compatible con OpenAI",
       "baseUrl": "URL base",
       "baseUrlHint": "URL base de la API compatible con OpenAI, por ejemplo https://api.groq.com/openai/v1. /chat/completions se añade automáticamente, salvo que incluyas esa ruta.",
-      "missingBaseUrl": "Introduce la URL base de la API compatible con OpenAI."
+      "missingBaseUrl": "Introduce la URL base de la API compatible con OpenAI.",
+      "connections": {
+        "freeOnly": "Solo modelos gratuitos",
+        "freeModels": "Usa el enrutador gratuito o un modelo cuyo ID termine en :free. Al desactivar esta opción, tu cuenta de OpenRouter puede usar modelos de pago.",
+        "googleTestOnly": "Google AI Studio utiliza una conversación ficticia. Un proyecto gratuito de Google puede usar modelos compatibles dentro de su cuota.",
+        "openRouterDrafts": "OpenRouter procesa los borradores en sus servidores. Everloop solicita rutas sin retención de datos para los borradores de clientes."
+      }
     },
     "aiKnowledge": {
       "loadFailed": "Error al cargar la base de conocimiento",
@@ -2340,7 +2431,10 @@
       "placeholder": "Escribe un mensaje de cliente…",
       "notConfigured": "Aún no hay un agente configurado; completa primero la Configuración.",
       "noReply": "No se pudo obtener una respuesta.",
-      "unreachable": "No se pudo conectar con el agente."
+      "unreachable": "No se pudo conectar con el agente.",
+      "runSample": "Ejecutar ejemplo",
+      "sampleQuestion": "¿A qué hora cierran hoy?",
+      "syntheticDesc": "Google AI Studio usa una conversación ficticia de una cafetería para esta prueba."
     },
     "usage": {
       "title": "Uso de tokens",
@@ -2497,6 +2591,12 @@
     }
   },
   "LibErrors": {
+    "marketingConsent": {
+      "template_unavailable": "Esta plantilla de WhatsApp no está disponible. Sincroniza las plantillas y selecciona una versión aprobada.",
+      "marketing_opt_out": "El destinatario se dio de baja del marketing por WhatsApp.",
+      "marketing_consent_required": "Registra el permiso de marketing por WhatsApp del destinatario antes de enviar.",
+      "marketing_consent_unavailable": "No se pudo verificar el permiso de marketing por WhatsApp. Inténtalo de nuevo."
+    },
     "upload": {
       "notSignedIn": "No has iniciado sesión.",
       "accountUnresolved": "No se pudo identificar tu cuenta."
@@ -2552,8 +2652,14 @@
       "none": "ninguno",
       "notConfigured": "WhatsApp no está configurado para esta cuenta",
       "dbInsertFailed": "enviado a Meta, pero falló el guardado en la base de datos: {message}",
+      "requestKeyInvalid": "Usa una clave de idempotencia de 1 a 128 letras, números o caracteres . _ : -.",
+      "requestKeyConflict": "Esta clave de idempotencia ya corresponde a otro envío.",
+      "requestPreviouslyRejected": "El envío ya fue rechazado. Revisa el mensaje antes de reintentar.",
+      "deliveryUncertain": "No se pudo confirmar la entrega. Revisa la conversación antes de volver a enviar.",
+      "replyWindowClosed": "La ventana de respuesta de 24 horas está cerrada. Usa una plantilla aprobada de WhatsApp.",
       "conversationLookupFailed": "falló la búsqueda de la conversación: {message}",
-      "conversationNotFound": "conversación no encontrada en esta cuenta"
+      "conversationNotFound": "conversación no encontrada en esta cuenta",
+      "deliveryConfirmed": "WhatsApp confirmó el envío. El registro local no está disponible y Everloop detuvo el reenvío."
     },
     "engine": {
       "needsContact": "{step} necesita un contacto",
@@ -2762,6 +2868,7 @@
         "notFound": "Invitación no encontrada",
         "loadFailed": "Error al cargar las invitaciones",
         "roleInvalid": "El rol debe ser admin, agent o viewer",
+        "originNotConfigured": "Configura NEXT_PUBLIC_SITE_URL con el origen HTTPS de Everloop antes de crear invitaciones.",
         "labelTooLong": "La etiqueta debe tener {max} caracteres o menos",
         "createFailed": "Error al crear la invitación"
       },
@@ -2868,7 +2975,7 @@
       "wabaIdDigits": "El WhatsApp Business Account ID debe contener solo dígitos: cópialo de Meta → WhatsApp → API Setup.",
       "pinDigits": "El PIN debe tener exactamente 6 dígitos.",
       "validateFailed": "Error al validar la configuración",
-      "numberLinkedElsewhere": "Este número de WhatsApp ya está vinculado a otra cuenta en esta instancia. Cada número de teléfono solo puede conectarse a un usuario de wacrm.",
+      "numberLinkedElsewhere": "Este número de WhatsApp ya está vinculado a otra cuenta en esta instancia. Cada número de teléfono solo puede conectarse a un usuario de Everloop.",
       "encryptFailed": "Error al cifrar el token. Verifica que ENCRYPTION_KEY sea una cadena hexadecimal válida de 64 caracteres en tus variables de entorno.",
       "updateFailed": "Error al actualizar la configuración",
       "saveFailed": "Error al guardar la configuración",
@@ -2923,5 +3030,24 @@
       "metaApiStatus": "Error de la API de Meta: {status}",
       "syncFailed": "Error al sincronizar las plantillas"
     }
+  },
+  "Mobile": {
+    "home": "Inicio",
+    "inbox": "Bandeja",
+    "contacts": "Contactos",
+    "campaigns": "Campañas",
+    "more": "Más",
+    "navigation": "Navegación principal",
+    "offline": "Estás sin conexión. Conéctate para enviar y recibir mensajes.",
+    "installTitle": "App móvil de Everloop",
+    "installDescription": "Abre Everloop desde la pantalla de inicio.",
+    "installAction": "Instalar Everloop",
+    "installHelpAction": "Ayuda de instalación",
+    "installHelp": "En iPhone, abre Everloop en Safari, pulsa Compartir y luego Añadir a pantalla de inicio. En Android, abre el menú de Chrome y elige Instalar aplicación o Añadir a pantalla de inicio.",
+    "pushDescription": "Recibe un aviso cuando alguien responda a una conversación asignada a ti. La pantalla bloqueada solo muestra Everloop.",
+    "pushOn": "Activar avisos del dispositivo",
+    "pushOff": "Desactivar avisos del dispositivo",
+    "pushPermission": "Permite las notificaciones en los ajustes del navegador o dispositivo.",
+    "pushError": "No se pudieron actualizar los avisos de este dispositivo."
   }
 }

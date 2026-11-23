@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clampExpiryDays,
   DEFAULT_INVITE_EXPIRY_DAYS,
@@ -6,6 +6,7 @@ import {
   hashInviteToken,
   inviteExpiresAt,
   inviteUrl,
+  resolveInviteOrigin,
   MAX_INVITE_EXPIRY_DAYS,
 } from "./invitations";
 
@@ -78,6 +79,48 @@ describe("inviteUrl", () => {
     // The token may contain `-` and `_`. Both are URL-safe; the
     // function must NOT percent-encode them.
     expect(inviteUrl("a-b_c", "https://x")).toBe("https://x/join/a-b_c");
+  });
+});
+
+describe("resolveInviteOrigin", () => {
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("ALLOWED_INVITE_HOSTS", "");
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("uses the configured HTTPS origin regardless of request headers", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://everloop.example/");
+    const request = new Request("https://preview.example/api/account/invitations", {
+      headers: { "x-forwarded-host": "preview.example" },
+    });
+    expect(resolveInviteOrigin(request)).toBe("https://everloop.example");
+  });
+
+  it("requires an approved host in production without an explicit origin", () => {
+    const request = new Request("https://everloop.example/api/account/invitations", {
+      headers: { "x-forwarded-host": "unlisted.example", host: "everloop.example" },
+    });
+    expect(resolveInviteOrigin(request)).toBeNull();
+    vi.stubEnv("ALLOWED_INVITE_HOSTS", "everloop.example");
+    expect(resolveInviteOrigin(request)).toBe("https://everloop.example");
+  });
+
+  it("rejects invalid configured origins without falling back to a different host", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://everloop.example/wrong-path");
+    vi.stubEnv("ALLOWED_INVITE_HOSTS", "everloop.example");
+    const request = new Request("https://everloop.example/api/account/invitations", {
+      headers: { host: "everloop.example" },
+    });
+    expect(resolveInviteOrigin(request)).toBeNull();
+  });
+
+  it("allows the loopback request origin for local development", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    expect(resolveInviteOrigin(new Request("http://localhost:3000/api/account/invitations")))
+      .toBe("http://localhost:3000");
   });
 });
 

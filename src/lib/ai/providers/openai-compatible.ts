@@ -81,6 +81,7 @@ export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
 }
 
 interface OpenAiCompatibleResponse {
+  model?: string
   choices?: { message?: { content?: string } }[]
   usage?: {
     prompt_tokens?: number
@@ -91,6 +92,11 @@ interface OpenAiCompatibleResponse {
 
 export async function generateOpenAiCompatible(
   args: ProviderArgs,
+  options?: {
+    label: string
+    body?: Record<string, unknown>
+    suppressUpstreamError?: boolean
+  },
 ): Promise<ProviderResult> {
   const { apiKey, model, systemPrompt, messages, timeoutMs, baseUrl } = args
   const endpoint = normalizeOpenAiCompatibleBaseUrl(baseUrl ?? '')
@@ -124,6 +130,7 @@ export async function generateOpenAiCompatible(
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...mergeConsecutive(messages)],
         max_tokens: MAX_OUTPUT_TOKENS,
+        ...options?.body,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -131,18 +138,25 @@ export async function generateOpenAiCompatible(
     throw toNetworkError(err)
   }
 
-  if (!res.ok) throw await providerHttpError('OpenAI-compatible provider', res)
+  const label = options?.label ?? 'OpenAI-compatible provider'
+  if (!res.ok) {
+    // A BYO provider can echo inputs in its error. Avoid returning those
+    // payloads through the managed provider settings or chat routes.
+    if (options?.suppressUpstreamError) throw await providerHttpError(label, new Response(null, { status: res.status }))
+    throw await providerHttpError(label, res)
+  }
 
   const data = (await res.json().catch(() => null)) as OpenAiCompatibleResponse | null
   const text = data?.choices?.[0]?.message?.content
   if (!text || typeof text !== 'string' || !text.trim()) {
-    throw new AiError(t('ai.emptyResponse', { provider: 'OpenAI-compatible provider' }), {
+    throw new AiError(t('ai.emptyResponse', { provider: label }), {
       code: 'empty_response',
     })
   }
 
   return {
     text,
+    ...(options && data?.model ? { resolvedModel: data.model } : {}),
     usage: normalizeUsage({
       prompt: data?.usage?.prompt_tokens,
       completion: data?.usage?.completion_tokens,

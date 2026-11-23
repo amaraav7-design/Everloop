@@ -60,6 +60,8 @@ function makeSupabaseMock() {
             },
             error: null,
           }
+        case 'whatsapp_marketing_consent_events':
+          return { data: { state: 'opted_in' }, error: null }
         case 'message_templates':
           return { data: null, error: null }
         default:
@@ -145,6 +147,12 @@ vi.mock('@/lib/flows/admin-client', () => ({
   }),
 }))
 
+vi.mock('@/lib/whatsapp/outbound-attempts', async (original) => ({
+  ...(await original<typeof import('@/lib/whatsapp/outbound-attempts')>()),
+  reserveSendAttempt: vi.fn(async () => ({ key: 'test-attempt', previous: null })),
+  settleSendAttempt: vi.fn(),
+}))
+
 vi.mock('@/lib/whatsapp/encryption', () => ({
   decrypt: vi.fn(() => 'plaintext-token'),
   encrypt: vi.fn(() => 'enc-token'),
@@ -194,6 +202,14 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('rejects free-form outreach before creating an empty conversation', async () => {
+    const res = await postContactTemplate({ message_type: 'text', content_text: 'Hello' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'reply_window_closed' })
+    expect(conversationInserts).toHaveLength(0)
+    expect(messageInserts).toHaveLength(0)
   })
 
   it('creates a conversation for a contact with none, then sends the template', async () => {

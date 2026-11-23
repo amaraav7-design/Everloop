@@ -413,8 +413,8 @@ export interface Deal {
   assignee?: Profile;
 }
 
-export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
-export type RecipientStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'replied' | 'failed';
+export type BroadcastStatus = 'draft' | 'scheduled' | 'queued' | 'sending' | 'paused' | 'sent' | 'partial' | 'failed' | 'canceled';
+export type RecipientStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'replied' | 'failed' | 'excluded' | 'uncertain' | 'canceled';
 
 export interface Broadcast {
   id: string;
@@ -432,6 +432,11 @@ export interface Broadcast {
   read_count: number;
   replied_count: number;
   failed_count: number;
+  delivery_mode?: 'legacy' | 'queue';
+  excluded_count?: number;
+  rejected_count?: number;
+  uncertain_count?: number;
+  draft_payload?: unknown;
   /**
    * Set while a server-side delivery pass is fanning out, NULL when
    * idle. Claimed with a conditional UPDATE so two resumes can't both
@@ -455,6 +460,7 @@ export interface BroadcastRecipient {
   delivered_at?: string;
   read_at?: string;
   replied_at?: string;
+  reply_attribution?: 'direct' | 'inferred';
   error_message?: string;
   /**
    * Meta's message id, persisted when the broadcast send succeeds so

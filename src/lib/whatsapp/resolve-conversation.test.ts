@@ -21,7 +21,7 @@ interface Script {
   insertContactError?: { code?: string } | null;
   /** Conversation lookup result (oldest-first `.order().limit(1)`).
    *  A single row or null; wrapped into a one-element array internally. */
-  existingConversation?: { id: string } | null; // conversations select.limit(1)
+  existingConversation?: { id: string; last_inbound_at?: string } | null;
   /** Per-call conversation lookup results — overrides existingConversation.
    *  Lets a test simulate "miss, then hit" for the unique-race path. */
   existingConversationByCall?: (({ id: string } | null))[];
@@ -189,6 +189,24 @@ describe('resolveConversationByPhone', () => {
       contactId: 'c2',
       contactCreated: true,
     });
+  });
+
+  it('returns 409 when free-form sending cannot resolve an existing thread', async () => {
+    const db = makeDb({ config: { user_id: 'owner-1' }, contactCandidates: [] });
+    await expect(resolveConversationByPhone(db, 'acct', '+14155550123', null, {
+      requireOpenWindow: true,
+    })).rejects.toMatchObject({ code: 'reply_window_closed', status: 409 });
+  });
+
+  it('resolves an existing in-window thread for a free-form reply', async () => {
+    const db = makeDb({
+      config: { user_id: 'owner-1' },
+      contactCandidates: [{ id: 'c1', phone: '14155550123' }],
+      existingConversation: { id: 'cv1', last_inbound_at: new Date(Date.now() - 60_000).toISOString() },
+    });
+    await expect(resolveConversationByPhone(db, 'acct', '+14155550123', null, {
+      requireOpenWindow: true,
+    })).resolves.toEqual({ conversationId: 'cv1', contactId: 'c1', contactCreated: false });
   });
 
   it('re-resolves an existing contact when the insert loses a unique race', async () => {

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import { useAuth } from '@/hooks/use-auth';
+import { useCan } from '@/hooks/use-can';
+import { ContactMarketingConsent } from './marketing-consent';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactNote, CustomField, Deal, MessageTemplate } from '@/types';
@@ -57,6 +59,7 @@ export function ContactDetailView({
   const t = useTranslations('Contacts.detailView');
   const supabase = createClient();
   const { accountId, defaultCurrency } = useAuth();
+  const canRecordMarketingConsent = useCan('send-messages');
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(open && Boolean(contactId));
@@ -556,6 +559,9 @@ export function ContactDetailView({
                     )}
                     {t('saveChangesBtn')}
                   </Button>
+                  {canRecordMarketingConsent && contact && (
+                    <ContactMarketingConsent key={JSON.stringify([contact.id, contact.phone, contact.wa_user_id])} contactId={contact.id} />
+                  )}
                 </div>
               </TabsContent>
 

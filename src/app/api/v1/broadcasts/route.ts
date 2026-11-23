@@ -1,40 +1,10 @@
-// ============================================================
-// POST /api/v1/broadcasts — launch a template broadcast
-// (scope: broadcasts:send).
-//
-// Body:
-//   {
-//     "name": "July promo",                 // optional label
-//     "template_name": "promo_july",        // required, approved template
-//     "template_language": "en_US",         // optional (default en_US)
-//     "recipients": [                        // required, 1..1000
-//       { "to": "+14155550123", "params": ["Jane"] },
-//       { "to": "+14155550124" }
-//     ]
-//   }
-//
-// The broadcast + its recipient rows are persisted synchronously, then
-// the Meta fan-out runs in `after()` so the request returns fast. Poll
-// `GET /api/v1/broadcasts/{id}` for progress.
-//
-// Response (202):
-//   { "data": { "broadcast_id", "status": "sending",
-//               "total_recipients", "accepted", "rejected" } }
-// ============================================================
-
 import { after } from 'next/server';
 
+import { campaignQueueEnabled, queuePublicCampaign, readCampaignKey, readCampaignSchedule } from '@/lib/whatsapp/campaign-queue';
 import { requireApiKey } from '@/lib/auth/api-context';
 
-// The `after()` fan-out below sends to every recipient sequentially and
-// runs within this route's max duration (the same constraint the
-// webhook route documents). Give it headroom beyond the platform
-// default so a modest batch isn't cut off mid-send — which would leave
-// recipient rows 'pending' and the broadcast stuck 'sending'. This is a
-// bound, not a guarantee: a near-cap (MAX_RECIPIENTS) audience can
-// still exceed 60s, so very large sends should be split across
-// requests. A durable queue/cron drain is the complete fix (follow-up).
 export const maxDuration = 60;
+
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
 import { resolveAuditUserId, ContactError } from '@/lib/api/v1/contacts';
 import {
@@ -61,7 +31,7 @@ export async function POST(request: Request) {
 
     const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId);
 
-    const plan = await createBroadcast(ctx.supabase, ctx.accountId, auditUserId, {
+    const input = {
       name: typeof body.name === 'string' ? body.name : null,
       templateName,
       templateLanguage:
@@ -72,7 +42,24 @@ export async function POST(request: Request) {
         to: typeof r?.to === 'string' ? r.to : '',
         params: Array.isArray(r?.params) ? r.params : undefined,
       })),
-    });
+    };
+    const key = readCampaignKey(request.headers.get('idempotency-key'));
+    const scheduledAt = readCampaignSchedule(body.scheduled_at);
+    if (campaignQueueEnabled(ctx.accountId)) {
+      const campaign = await queuePublicCampaign(ctx.supabase, ctx.accountId, auditUserId, input, key, scheduledAt);
+      return ok({
+        broadcast_id: campaign.id,
+        status: campaign.status,
+        total_recipients: campaign.total_recipients,
+        accepted: campaign.total_recipients - (campaign.excluded_count ?? 0),
+        excluded: campaign.excluded_count ?? 0,
+        rejected: campaign.rejected_count ?? 0,
+      }, 202);
+    }
+    if (key || scheduledAt) {
+      return fail('campaign_queue_unavailable', 'Scheduled and idempotent launches require the campaign worker.', 503);
+    }
+    const plan = await createBroadcast(ctx.supabase, ctx.accountId, auditUserId, input);
 
     // Fan out after the response is sent. Uses the same service-role
     // client — no request-scoped auth needed for the Meta calls or

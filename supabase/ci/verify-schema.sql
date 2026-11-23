@@ -21,6 +21,36 @@ BEGIN
     RAISE EXCEPTION 'public.whatsapp_config is missing — migrations did not apply';
   END IF;
 
+  IF to_regclass('public.whatsapp_marketing_consent_events') IS NULL
+    OR to_regclass('public.whatsapp_webhook_receipts') IS NULL
+    OR to_regclass('public.whatsapp_inbound_dispatches') IS NULL
+    OR to_regclass('public.whatsapp_outbound_attempts') IS NULL THEN
+    RAISE EXCEPTION 'WhatsApp consent or webhook recovery tables are missing';
+  END IF;
+  IF has_table_privilege('authenticated', 'public.whatsapp_marketing_consent_events', 'INSERT')
+    OR has_table_privilege('authenticated', 'public.whatsapp_webhook_receipts', 'SELECT')
+    OR has_table_privilege('authenticated', 'public.whatsapp_outbound_attempts', 'SELECT')
+    OR has_function_privilege('authenticated', 'public.claim_whatsapp_webhook_receipt(text)', 'EXECUTE')
+    OR has_function_privilege('authenticated', 'public.persist_whatsapp_inbound(uuid,jsonb,text,boolean,boolean)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'A WhatsApp worker permission is exposed to authenticated users';
+  END IF;
+
+  IF to_regclass('public.campaign_delivery_jobs') IS NULL
+    OR to_regclass('public.ai_provider_connections') IS NULL
+    OR to_regclass('public.everloop_push_subscriptions') IS NULL
+    OR to_regprocedure('public.inbox_conversation_page(uuid,text,text,uuid[],text,timestamptz,uuid)') IS NULL
+    OR to_regprocedure('public.reconcile_outbound_callback(uuid,uuid,text,text)') IS NULL THEN
+    RAISE EXCEPTION 'An Everloop campaign, AI, mobile, or delivery schema change is missing';
+  END IF;
+  IF has_table_privilege('authenticated', 'public.campaign_delivery_jobs', 'SELECT')
+    OR has_table_privilege('authenticated', 'public.ai_provider_connections', 'SELECT')
+    OR has_table_privilege('authenticated', 'public.everloop_push_subscriptions', 'SELECT')
+    OR has_function_privilege('authenticated', 'public.claim_campaign_job(uuid[])', 'EXECUTE')
+    OR has_function_privilege('authenticated', 'public.reconcile_outbound_callback(uuid,uuid,text,text)', 'EXECUTE')
+    OR has_function_privilege('authenticated', 'public.save_ai_provider_connection(uuid,uuid,text,text,text,boolean,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'An Everloop service-only table or RPC is accessible to authenticated users';
+  END IF;
+
   -- Supabase provides the storage schema; migrations 016/020/023 write
   -- to it. If it is absent the bucket migrations silently accomplish
   -- nothing, which is precisely the case a plain "no errors" run hides.

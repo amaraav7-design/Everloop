@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { MobileNavigation } from "@/components/layout/mobile-navigation";
+import { useCaptureInstallPrompt } from "@/components/pwa/install-prompt";
+import { PwaRuntime, useKeyboardViewport } from "@/components/pwa/pwa-runtime";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
@@ -17,12 +21,20 @@ import { BrowserNotificationsListener } from "@/components/notifications/browser
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const inbox = usePathname() === "/inbox";
+  useKeyboardViewport();
+  useCaptureInstallPrompt();
   const t = useTranslations("DashboardShell");
 
-  // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
-  // always visible and this stays at `false` (ignored by the component).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const button = moreButton.current;
+    return () => button?.focus({ preventScroll: true });
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -32,7 +44,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="everloop-shell flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           <p className="text-sm text-muted-foreground">{t("loading")}</p>
@@ -44,7 +56,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="everloop-shell flex overflow-hidden bg-background">
       {/* Reports this tab's online/away presence once we know a user is
           signed in. Headless — renders nothing. */}
       <PresenceHeartbeat />
@@ -52,15 +64,17 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           Your profile). Headless — renders nothing. */}
       <BrowserNotificationsListener />
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
+      <div inert={sidebarOpen} className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <Header />
+        <PwaRuntime />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className={cn("relative min-h-0 flex-1", inbox ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain p-4 sm:p-6")}>
           {/* Above every page: writes are being rejected and here's why.
               Renders nothing unless the account/role failed to resolve. */}
           <AccountAccessAlert />
-          {children}
+          {inbox ? <div className="min-h-0 flex-1">{children}</div> : children}
         </main>
+        <MobileNavigation open={sidebarOpen} moreButton={moreButton} onMore={() => setSidebarOpen(true)} />
       </div>
     </div>
   );

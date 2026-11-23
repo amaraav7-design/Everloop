@@ -1,4 +1,5 @@
 import type { Conversation, ConversationStatus } from "@/types";
+import { replyWindowExpiresAt } from "@/lib/whatsapp/reply-window";
 
 export const INBOX_FILTERS = [
   "all",
@@ -13,7 +14,6 @@ export const INBOX_FILTERS = [
 
 export type InboxFilter = (typeof INBOX_FILTERS)[number];
 
-const WINDOW_MS = 24 * 60 * 60 * 1000;
 const EXPIRING_WITHIN_MS = 2 * 60 * 60 * 1000;
 
 export function parseInboxFilter(raw: string | null | undefined): InboxFilter {
@@ -29,9 +29,9 @@ export function isAwaitingReply(c: Conversation): boolean {
 }
 
 export function isWindowClosing(c: Conversation, now: number): boolean {
-  if (!isAwaitingReply(c) || !c.last_inbound_at) return false;
-  const closesAt = new Date(c.last_inbound_at).getTime() + WINDOW_MS;
-  return closesAt > now && closesAt - now <= EXPIRING_WITHIN_MS;
+  if (!isAwaitingReply(c)) return false;
+  const closesAt = replyWindowExpiresAt(c.last_inbound_at);
+  return closesAt !== null && closesAt > now && closesAt - now <= EXPIRING_WITHIN_MS;
 }
 
 function byOldestInbound(a: Conversation, b: Conversation): number {

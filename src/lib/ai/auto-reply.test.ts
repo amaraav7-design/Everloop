@@ -56,18 +56,16 @@ vi.mock('./admin-client', () => ({
         return chain
       }
       // conversations
-      return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: () =>
-              Promise.resolve({ data: h.state.conv, error: null }),
-          }),
-        }),
+      const conversation = {
+        select: () => conversation,
+        eq: () => conversation,
+        maybeSingle: () => Promise.resolve({ data: h.state.conv, error: null }),
         update: (payload: Record<string, unknown>) => {
           h.state.updatePayload = payload
           return { eq: () => Promise.resolve({ error: null }) }
         },
       }
+      return conversation
     },
     rpc: (name: string, args: unknown) => {
       h.state.rpcCalls.push({ name, args })
@@ -107,6 +105,7 @@ beforeEach(() => {
     assigned_agent_id: null,
     ai_autoreply_disabled: false,
     ai_reply_count: 0,
+    last_inbound_at: new Date(Date.now() - 60_000).toISOString(),
   }
   h.state.autoResponders = []
   h.state.claim = true
@@ -189,6 +188,14 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     await dispatchInboundToAiReply(ARGS)
     expect(h.generateReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('does not send chat context to the provider when the WhatsApp window is closed', async () => {
+    h.state.conv = { ...h.state.conv, last_inbound_at: null }
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.buildConversationContext).not.toHaveBeenCalled()
+    expect(h.sendTypingIndicator).not.toHaveBeenCalled()
+    expect(h.generateReply).not.toHaveBeenCalled()
   })
 
   it('skips when auto-reply is disabled for the account', async () => {

@@ -32,6 +32,18 @@ export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
     label: "scheduled",
     classes: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   },
+  queued: {
+    label: "queued",
+    classes: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  },
+  paused: {
+    label: "paused",
+    classes: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  },
+  canceled: {
+    label: "canceled",
+    classes: "bg-slate-500/10 text-muted-foreground border-slate-500/20",
+  },
   sending: {
     label: "sending",
     classes: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
@@ -41,6 +53,10 @@ export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
     label: "sent",
     classes: "bg-primary/10 text-primary border-primary/20",
   },
+  partial: {
+    label: "partial",
+    classes: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  },
   failed: {
     label: "failed",
     classes: "bg-red-500/10 text-red-400 border-red-500/20",
@@ -48,6 +64,15 @@ export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
 };
 
 export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
+  excluded: {
+    label: "excluded",
+    classes: "bg-slate-500/10 text-muted-foreground border-slate-500/20",
+  },
+  canceled: broadcastStatusConfig.canceled,
+  uncertain: {
+    label: "uncertain",
+    classes: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  },
   pending: {
     label: "pending",
     classes: "bg-slate-500/10 text-muted-foreground border-slate-500/20",
@@ -100,6 +125,9 @@ export const RECIPIENT_STATUSES: readonly RecipientStatus[] = [
   "read",
   "replied",
   "failed",
+  "excluded",
+  "uncertain",
+  "canceled",
 ];
 
 const RECIPIENT_SUCCESS_LADDER: readonly RecipientStatus[] = [
@@ -126,7 +154,7 @@ export function isValidRecipientTransition(
   if (incoming === "failed") {
     return RECIPIENT_STATUSES_THAT_CAN_FAIL.includes(current);
   }
-  if (current === "failed") return false;
+  if (!RECIPIENT_SUCCESS_LADDER.includes(current) || !RECIPIENT_SUCCESS_LADDER.includes(incoming)) return false;
   return (
     RECIPIENT_SUCCESS_LADDER.indexOf(incoming) >
     RECIPIENT_SUCCESS_LADDER.indexOf(current)

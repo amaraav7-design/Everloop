@@ -257,6 +257,10 @@ function nextIntlParses(message: string): boolean {
 describe('message catalogue parity', () => {
   const source = loadKeys(SOURCE_LOCALE);
 
+  it('keeps the mobile contact sheet label in the inbox page namespace', () => {
+    expect(source.has('Inbox.page.mobileContactDetails')).toBe(true);
+  });
+
   it.each(TRANSLATED_LOCALES)('%s.json covers every en.json key', (locale) => {
     const translated = loadKeys(locale);
     const missing = [...source].filter((k) => !translated.has(k)).sort();

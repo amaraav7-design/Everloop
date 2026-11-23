@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       )
       .slice(-MAX_TURNS)
 
-    if (messages.length === 0) {
+    if (messages.length === 0 && body?.sample !== true) {
       return NextResponse.json(
         { error: t('ai.sendMessageToTest') },
         { status: 400 },
@@ -73,6 +73,20 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       )
+    }
+
+    if (config.provider === 'google_ai_studio') {
+      const { text, handoff } = await generateReply({
+        config,
+        synthetic: true,
+        systemPrompt: 'You help a fictional coffee shop. The opening hours are 9 AM to 5 PM. Write a short WhatsApp reply.',
+        messages: [{ role: 'user', content: 'What time do you close today?' }],
+      })
+      return NextResponse.json({ reply: text, handoff, synthetic: true })
+    }
+
+    if (!messages.length) {
+      return NextResponse.json({ error: t('ai.sendMessageToTest') }, { status: 400 })
     }
 
     const knowledge = await retrieveKnowledge(
