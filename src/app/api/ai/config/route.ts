@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     // Reuse the stored key when the form didn't send a fresh one.
     const { data: existing } = await supabase
       .from('ai_configs')
-      .select('id, provider, model, base_url, api_key')
+      .select('id, provider, model, base_url, api_key, is_active, auto_reply_enabled')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -193,7 +193,10 @@ export async function POST(request: Request) {
       baseUrl !== (existing.base_url ?? null) ||
       (managedProvider !== null && connection?.free_only !== freeOnly)
 
-    if (credentialsChanged) {
+    const activatingOpenRouter = provider === 'openrouter' &&
+      ((isActive && !existing?.is_active) || (autoReplyEnabled && !existing?.auto_reply_enabled))
+
+    if (credentialsChanged || activatingOpenRouter) {
       try {
         await validateAiCredentials({
           provider,

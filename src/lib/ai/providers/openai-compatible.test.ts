@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { generateOpenAiCompatible, normalizeOpenAiCompatibleBaseUrl } from './openai-compatible'
+import { AiError } from '../types'
 
 describe('normalizeOpenAiCompatibleBaseUrl', () => {
   it('appends /chat/completions to a base URL', () => {
@@ -79,6 +80,35 @@ describe('normalizeOpenAiCompatibleBaseUrl', () => {
 })
 
 describe('generateOpenAiCompatible', () => {
+  it.each([404, 200])('maps a managed provider route error without exposing the upstream payload (HTTP %s)', async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      error: { code: 404, message: 'private provider diagnostic' },
+    }, { status }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(generateOpenAiCompatible({
+        apiKey: 'test-key',
+        model: 'openrouter/free',
+        systemPrompt: 'Fictional test',
+        messages: [{ role: 'user', content: 'Hi' }],
+        timeoutMs: 1000,
+        baseUrl: 'https://8.8.8.8/v1',
+      }, {
+        label: 'OpenRouter',
+        suppressUpstreamError: true,
+        errorForStatus: status => status === 404
+          ? new AiError('No eligible model route', { code: 'provider_route_unavailable', status: 503 })
+          : undefined,
+      })).rejects.toMatchObject({
+        message: 'No eligible model route',
+        code: 'provider_route_unavailable',
+        status: 503,
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('blocks private addresses by default', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

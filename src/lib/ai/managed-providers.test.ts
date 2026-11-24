@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiConfig } from './types';
 import { generateReply } from './generate';
+import { validateAiCredentials } from './validate';
 
 const adapter = vi.hoisted(() => vi.fn());
 vi.mock('./providers/openai-compatible', () => ({ generateOpenAiCompatible: adapter }));
@@ -42,5 +43,16 @@ describe('managed AI providers', () => {
     expect(adapter).toHaveBeenCalledWith(expect.objectContaining({
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     }), expect.objectContaining({ label: 'Google AI Studio' }));
+  });
+
+  it('tests OpenRouter with fictional content and the same routing protections as Inbox drafts', async () => {
+    adapter.mockResolvedValue({ text: 'OK', usage: null });
+    await validateAiCredentials({ ...config, systemPrompt: 'Private workspace instructions' });
+    expect(adapter).toHaveBeenCalledWith(expect.objectContaining({
+      messages: [{ role: 'user', content: 'ping' }],
+      systemPrompt: expect.stringContaining('connectivity check'),
+    }), expect.objectContaining({
+      body: { provider: { data_collection: 'deny', zdr: true, max_price: { prompt: 0, completion: 0, request: 0 } } },
+    }));
   });
 });

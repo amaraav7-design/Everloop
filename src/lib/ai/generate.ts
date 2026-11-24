@@ -11,6 +11,21 @@ import { generateOpenAi } from './providers/openai'
 import { generateOpenAiCompatible } from './providers/openai-compatible'
 import { generateAnthropic } from './providers/anthropic'
 import { MANAGED_PROVIDER_LABEL, MANAGED_PROVIDER_URL, redactAiText, validateManagedModel } from './managed-providers'
+import { getT } from '@/lib/i18n/translate'
+
+const t = getT('LibErrors.ai')
+
+function openRouterHttpError(status: number): AiError | undefined {
+  if (status === 404) {
+    return new AiError(t('openRouterNoRoute'), { code: 'provider_route_unavailable', status: 503 })
+  }
+  if (status === 402) {
+    return new AiError(t('openRouterBudget'), { code: 'provider_budget', status: 402 })
+  }
+  if (status === 403) {
+    return new AiError(t('openRouterRestricted'), { code: 'provider_restricted', status: 403 })
+  }
+}
 
 export interface GenerateArgs {
   config: AiConfig
@@ -58,7 +73,8 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
       }
       const openRouterRouting = provider === 'openrouter' ? {
         provider: {
-          ...(!args.synthetic ? { data_collection: 'deny', zdr: true } : {}),
+          data_collection: 'deny',
+          zdr: true,
           ...(freeOnly ? { max_price: { prompt: 0, completion: 0, request: 0 } } : {}),
         },
       } : undefined
@@ -69,6 +85,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
       }
       result = await generateOpenAiCompatible({ ...scopedArgs, baseUrl: MANAGED_PROVIDER_URL[provider] }, {
         body: openRouterRouting, label: MANAGED_PROVIDER_LABEL[provider], suppressUpstreamError: true,
+        ...(provider === 'openrouter' ? { errorForStatus: openRouterHttpError } : {}),
       })
       break
     }

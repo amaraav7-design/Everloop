@@ -82,6 +82,7 @@ export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
 
 interface OpenAiCompatibleResponse {
   model?: string
+  error?: { code?: number }
   choices?: { message?: { content?: string } }[]
   usage?: {
     prompt_tokens?: number
@@ -96,6 +97,7 @@ export async function generateOpenAiCompatible(
     label: string
     body?: Record<string, unknown>
     suppressUpstreamError?: boolean
+    errorForStatus?: (status: number) => AiError | undefined
   },
 ): Promise<ProviderResult> {
   const { apiKey, model, systemPrompt, messages, timeoutMs, baseUrl } = args
@@ -140,6 +142,8 @@ export async function generateOpenAiCompatible(
 
   const label = options?.label ?? 'OpenAI-compatible provider'
   if (!res.ok) {
+    const error = options?.errorForStatus?.(res.status)
+    if (error) throw error
     // A BYO provider can echo inputs in its error. Avoid returning those
     // payloads through the managed provider settings or chat routes.
     if (options?.suppressUpstreamError) throw await providerHttpError(label, new Response(null, { status: res.status }))
@@ -149,6 +153,11 @@ export async function generateOpenAiCompatible(
   const data = (await res.json().catch(() => null)) as OpenAiCompatibleResponse | null
   const text = data?.choices?.[0]?.message?.content
   if (!text || typeof text !== 'string' || !text.trim()) {
+    if (options?.errorForStatus && typeof data?.error?.code === 'number' &&
+        data.error.code >= 400 && data.error.code < 600) {
+      throw options.errorForStatus(data.error.code) ??
+        await providerHttpError(label, new Response(null, { status: data.error.code }))
+    }
     throw new AiError(t('ai.emptyResponse', { provider: label }), {
       code: 'empty_response',
     })
