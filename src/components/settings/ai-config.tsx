@@ -56,7 +56,7 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
 
 type ProviderConnection = { provider: ManagedAiProvider; model: string; free_only: boolean };
 
-export function AiConfig() {
+export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void }) {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
   const t = useTranslations('Settings.aiConfig');
@@ -270,16 +270,20 @@ export function AiConfig() {
     }
   };
 
-  if (loading || profileLoading) {
+  if (profileLoading || (accountId && loading)) {
     return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('loadFailed')} {/* Re-using label or a global one, wait, loading is better. Let's use useTranslations from overview or just hardcode Loading... actually I should add loading to aiConfig */}
-        {/* Wait, I didn't add loading to aiConfig. I'll just use loading. */}
+      <div role="status" className="flex items-center justify-center py-16 text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> {t('loading')}
       </div>
     );
   }
 
+  if (!accountId) return <p role="status" className="text-sm text-muted-foreground">{t('loadFailed')}</p>;
+
   const disabled = !canEdit || saving;
+  const isGoogleTest = provider === 'google_ai_studio';
+  const canAutoReply = provider !== 'openrouter' || autoReplyPilot;
+  const handoffMember = members.find(member => member.user_id === handoffAgentId);
 
   return (
     <div>
@@ -307,14 +311,16 @@ export function AiConfig() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>{t('provider')}</Label>
+                <Label htmlFor="ai-provider">{t('provider')}</Label>
                 <Select
                   value={provider}
                   onValueChange={(v) => handleProviderChange(v as AiProvider)}
                   disabled={disabled}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger id="ai-provider">
+                    <SelectValue>
+                      {provider === 'openai_compatible' ? t('providerOpenAiCompatible') : PROVIDER_LABEL[provider]}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="openrouter">{PROVIDER_LABEL.openrouter}</SelectItem>
@@ -465,110 +471,128 @@ export function AiConfig() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('behaviour')}</CardTitle>
-            <CardDescription>
-              {t('behaviourDesc')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ai-prompt">{t('businessContext')}</Label>
-              <Textarea
-                id="ai-prompt"
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder={t('promptPlaceholder')}
-                rows={5}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('enableAssistant')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('enableAssistantDesc')}
-                </p>
+        {isGoogleTest ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('connections.playgroundOnlyTitle')}</CardTitle>
+              <CardDescription>{t('connections.playgroundOnlyDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {savedProvider === provider && hasStoredKey ? (
+                <Button variant="outline" onClick={onOpenPlayground}>{t('connections.openPlayground')}</Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('connections.saveForPlayground')}</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('behaviour')}</CardTitle>
+              <CardDescription>
+                {t('behaviourDesc')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="ai-prompt">{t('businessContext')}</Label>
+                <Textarea
+                  id="ai-prompt"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  placeholder={t('promptPlaceholder')}
+                  rows={5}
+                  disabled={disabled}
+                />
               </div>
-              <Switch
-                checked={isActive}
-                onCheckedChange={setIsActive}
-                disabled={disabled || provider === 'google_ai_studio'}
-              />
-            </div>
 
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('autoReply')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('autoReplyDesc')}
-                </p>
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                <div>
+                  <Label id="ai-assistant-label" htmlFor="ai-assistant-enabled">{t('enableAssistant')}</Label>
+                  <p id="ai-assistant-description" className="text-xs text-muted-foreground">
+                    {t('enableAssistantDesc')}
+                  </p>
+                </div>
+                <Switch
+                  id="ai-assistant-enabled"
+                  aria-labelledby="ai-assistant-label"
+                  aria-describedby="ai-assistant-description"
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
+                  disabled={disabled}
+                />
               </div>
-              <Switch
-                checked={autoReplyEnabled}
-                onCheckedChange={setAutoReplyEnabled}
-                disabled={disabled || !isActive || (isManagedProvider(provider) && (provider !== 'openrouter' || !autoReplyPilot))}
-              />
-            </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <Label htmlFor="ai-max">{t('maxAutoReplies')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {t('maxAutoRepliesDesc')}
-                </p>
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                <div>
+                  <Label id="ai-auto-reply-label" htmlFor="ai-auto-reply">{t('autoReply')}</Label>
+                  <p id="ai-auto-reply-description" className="text-xs text-muted-foreground">
+                    {t(canAutoReply ? 'autoReplyDesc' : 'connections.openRouterAutoReplyUnavailable')}
+                  </p>
+                </div>
+                <Switch
+                  id="ai-auto-reply"
+                  aria-labelledby="ai-auto-reply-label"
+                  aria-describedby="ai-auto-reply-description"
+                  checked={autoReplyEnabled}
+                  onCheckedChange={setAutoReplyEnabled}
+                  disabled={disabled || !isActive || !canAutoReply}
+                />
               </div>
-              <Input
-                id="ai-max"
-                type="number"
-                min={1}
-                max={20}
-                value={maxPerConversation}
-                onChange={(e) =>
-                  setMaxPerConversation(
-                    Math.min(20, Math.max(1, Number(e.target.value) || 1)),
-                  )
-                }
-                disabled={disabled || !autoReplyEnabled}
-                className="w-20"
-              />
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ai-handoff">{t('handoffTo')}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t('handoffToDesc')}
-              </p>
-              <Select
-                value={handoffAgentId || HANDOFF_QUEUE}
-                onValueChange={(v) =>
-                  setHandoffAgentId(!v || v === HANDOFF_QUEUE ? '' : v)
-                }
-                disabled={disabled || !autoReplyEnabled}
-              >
-                <SelectTrigger id="ai-handoff">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={HANDOFF_QUEUE}>
-                    {t('handoffQueue')}
-                  </SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m.user_id} value={m.user_id}>
-                      {memberLabel(m)}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="ai-max">{t('maxAutoReplies')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('maxAutoRepliesDesc')}
+                  </p>
+                </div>
+                <Input
+                  id="ai-max"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={maxPerConversation}
+                  onChange={(e) =>
+                    setMaxPerConversation(
+                      Math.min(20, Math.max(1, Number(e.target.value) || 1)),
+                    )
+                  }
+                  disabled={disabled || !autoReplyEnabled}
+                  className="w-20"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ai-handoff">{t('handoffTo')}</Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('handoffToDesc')}
+                </p>
+                <Select
+                  value={handoffAgentId || HANDOFF_QUEUE}
+                  onValueChange={(v) =>
+                    setHandoffAgentId(!v || v === HANDOFF_QUEUE ? '' : v)
+                  }
+                  disabled={disabled || !autoReplyEnabled}
+                >
+                  <SelectTrigger id="ai-handoff">
+                    <SelectValue>{handoffMember ? memberLabel(handoffMember) : t('handoffQueue')}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={HANDOFF_QUEUE}>
+                      {t('handoffQueue')}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+                    {members.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {memberLabel(m)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <AiKnowledgeCard
           accountId={accountId}

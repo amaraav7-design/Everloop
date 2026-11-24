@@ -1153,6 +1153,7 @@
         "timing": "Hora de envío",
         "localTime": "Fecha y hora ({zone})",
         "invalidTime": "Elige una hora futura válida.",
+        "sendingUnavailable": "El envío de campañas no está disponible en este espacio hasta que se configure el envío en segundo plano. Puedes revisar y guardar un borrador.",
         "retryPreview": "Volver a cargar la vista previa",
         "noEligible": "Ningún destinatario cumple los requisitos de esta campaña.",
         "exclusions": {
@@ -2216,6 +2217,7 @@
     "aiConfig": {
       "title": "Configuración del agente",
       "description": "Usa tus propias claves de IA. Los borradores y las pruebas se envían al proveedor elegido. Las claves de OpenRouter y Google AI Studio se guardan por separado.",
+      "loading": "Cargando la configuración del agente…",
       "adminOnlyConfig": "Solo los administradores y propietarios pueden cambiar la configuración de IA.",
       "loadFailed": "Error al cargar la configuración de IA",
       "providerAndKey": "Proveedor y clave",
@@ -2259,6 +2261,11 @@
       "connections": {
         "freeOnly": "Solo modelos gratuitos",
         "freeModels": "Usa el enrutador gratuito o un modelo cuyo ID termine en :free. Al desactivar esta opción, tu cuenta de OpenRouter puede usar modelos de pago.",
+        "playgroundOnlyTitle": "Google AI Studio se usa para pruebas en Playground",
+        "playgroundOnlyDesc": "Prueba el modelo con una conversación ficticia en Playground. Para activar los borradores para clientes en la bandeja de entrada, elige un proveedor como OpenRouter y guarda la configuración con el asistente de IA activado.",
+        "openPlayground": "Abrir Playground",
+        "saveForPlayground": "Guarda tu conexión de Google AI Studio para usarla en Playground.",
+        "openRouterAutoReplyUnavailable": "Las respuestas automáticas de OpenRouter requieren acceso al programa piloto. Los borradores de la bandeja de entrada están disponibles cuando activas el asistente de IA.",
         "googleTestOnly": "Google AI Studio utiliza una conversación ficticia. Un proyecto gratuito de Google puede usar modelos compatibles dentro de su cuota.",
         "openRouterDrafts": "OpenRouter procesa los borradores en sus servidores. Everloop solicita rutas sin retención de datos para los borradores de clientes."
       }

@@ -75,7 +75,7 @@ export default function AgentsPage() {
           </TabsContent>
 
           <TabsContent value="setup" className="mt-4">
-            <AiConfig />
+            <AiConfig onOpenPlayground={() => setTab('playground')} />
           </TabsContent>
 
           {canViewUsage && (

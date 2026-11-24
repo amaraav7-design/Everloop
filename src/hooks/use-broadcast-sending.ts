@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import type { CampaignInput, CampaignSummary } from '@/lib/whatsapp/campaign-input';
+import type { CampaignInput, CampaignPreview } from '@/lib/whatsapp/campaign-input';
 export type { VariableMapping } from '@/lib/broadcast-personalization';
 
 async function sendRequest(input: CampaignInput & { testTo?: string }, action: 'preview' | 'launch' | 'test', key?: string, signal?: AbortSignal) {
@@ -16,8 +16,8 @@ async function sendRequest(input: CampaignInput & { testTo?: string }, action: '
   return result;
 }
 
-export async function previewCampaign(input: CampaignInput, signal: AbortSignal): Promise<CampaignSummary> {
-  return (await sendRequest(input, 'preview', undefined, signal)).summary;
+export async function previewCampaign(input: CampaignInput, signal: AbortSignal): Promise<CampaignPreview> {
+  return sendRequest(input, 'preview', undefined, signal);
 }
 
 export function useBroadcastSending() {

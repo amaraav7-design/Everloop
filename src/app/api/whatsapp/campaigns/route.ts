@@ -97,6 +97,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Choose preview or launch.' }, { status: 400 });
     }
     const preview = body.action === 'preview';
+    const sendingConfigured = campaignQueueEnabled(accountId);
     const test = body.action === 'test';
     const testPhone = test && typeof body.testTo === 'string' ? parseInternationalPhone(body.testTo) : null;
     if (test && !testPhone) return NextResponse.json({ error: 'Enter a test phone number with its country code.' }, { status: 400 });
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
     if (!preview) {
       const existing = await findQueuedCampaign(admin, accountId, key, fingerprint);
       if (existing) return NextResponse.json({ broadcast_id: existing.id }, { status: 202 });
-      if (!campaignQueueEnabled(accountId)) {
+      if (!sendingConfigured) {
         return NextResponse.json({ error: 'Campaign scheduling is unavailable until the background worker is configured.' }, { status: 503 });
       }
     }
@@ -139,7 +140,9 @@ export async function POST(request: Request) {
         ...(input.headerText ? { headerText: input.headerText } : {}),
         ...(input.buttonParams ? { buttonParams: input.buttonParams } : {}) },
     })));
-    if (preview) return NextResponse.json({ summary: plan.summary }, { headers: { 'Cache-Control': 'no-store' } });
+    if (preview) {
+      return NextResponse.json({ summary: plan.summary, sendingConfigured }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     if (!plan.summary.eligible) {
       return NextResponse.json({ error: test ? 'Use an eligible test contact saved in this workspace.' : 'No eligible recipients. Review audience exclusions and preview the campaign again.', summary: plan.summary }, { status: 409 });
     }

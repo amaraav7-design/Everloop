@@ -1153,6 +1153,7 @@
         "timing": "발송 시간",
         "localTime": "날짜 및 시간 ({zone})",
         "invalidTime": "유효한 미래 시간을 선택하세요.",
+        "sendingUnavailable": "백그라운드 발송을 설정할 때까지 이 워크스페이스에서 캠페인을 발송할 수 없습니다. 캠페인을 검토하고 초안으로 저장할 수 있습니다.",
         "retryPreview": "미리보기 다시 시도",
         "noEligible": "이 캠페인의 발송 조건을 충족하는 수신자가 없습니다.",
         "exclusions": {
@@ -2216,6 +2217,7 @@
     "aiConfig": {
       "title": "에이전트 설정",
       "description": "자체 AI 키를 사용하세요. 답장 초안과 테스트 요청은 선택한 제공업체로 전송됩니다. OpenRouter와 Google AI Studio 키는 별도로 저장됩니다.",
+      "loading": "에이전트 설정을 불러오는 중…",
       "adminOnlyConfig": "관리자와 소유자만 AI 설정을 변경할 수 있습니다.",
       "loadFailed": "AI 설정을 불러오지 못했습니다",
       "providerAndKey": "공급자 & 키",
@@ -2259,6 +2261,11 @@
       "connections": {
         "freeOnly": "무료 모델만 사용",
         "freeModels": "무료 라우터 또는 :free로 끝나는 모델 ID를 사용하세요. 이 옵션을 끄면 OpenRouter 계정에서 유료 모델을 사용할 수 있습니다.",
+        "playgroundOnlyTitle": "Google AI Studio는 Playground 테스트용입니다",
+        "playgroundOnlyDesc": "Playground에서 가상의 대화로 모델을 테스트하세요. 받은 편지함에서 고객 답변 초안을 사용하려면 OpenRouter 같은 제공업체를 선택하고 AI 도우미를 켠 상태로 저장하세요.",
+        "openPlayground": "Playground 열기",
+        "saveForPlayground": "Playground에서 사용하려면 Google AI Studio 연결을 저장하세요.",
+        "openRouterAutoReplyUnavailable": "OpenRouter 자동 응답을 사용하려면 파일럿 프로그램에 참여해야 합니다. AI 도우미를 켜면 받은 편지함에서 답변 초안을 사용할 수 있습니다.",
         "googleTestOnly": "Google AI Studio 테스트에는 가상 대화를 사용합니다. Google 무료 프로젝트는 할당량 내에서 지원 모델을 사용할 수 있습니다.",
         "openRouterDrafts": "OpenRouter는 자체 서버에서 답장 초안을 처리합니다. Everloop는 고객 대화에 데이터 보존을 하지 않는 경로를 요청합니다."
       }

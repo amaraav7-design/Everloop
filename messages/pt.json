@@ -1153,6 +1153,7 @@
         "timing": "Horário do envio",
         "localTime": "Data e hora ({zone})",
         "invalidTime": "Escolha um horário futuro válido.",
+        "sendingUnavailable": "O envio de campanhas fica indisponível neste espaço de trabalho até que o envio em segundo plano seja configurado. Você ainda pode revisar e salvar um rascunho.",
         "retryPreview": "Recarregar prévia",
         "noEligible": "Nenhum destinatário está apto para esta campanha.",
         "exclusions": {
@@ -2216,6 +2217,7 @@
     "aiConfig": {
       "title": "Configuração do agente",
       "description": "Use suas próprias chaves de IA. Rascunhos e testes são enviados ao provedor selecionado. As chaves do OpenRouter e do Google AI Studio são salvas separadamente.",
+      "loading": "Carregando a configuração do agente…",
       "adminOnlyConfig": "Somente administradores e proprietários podem alterar a configuração de IA.",
       "loadFailed": "Falha ao carregar a configuração de IA",
       "providerAndKey": "Provedor e chave",
@@ -2259,6 +2261,11 @@
       "connections": {
         "freeOnly": "Apenas modelos gratuitos",
         "freeModels": "Use o roteador gratuito ou um ID de modelo terminado em :free. Desativar esta opção permite modelos pagos na sua conta OpenRouter.",
+        "playgroundOnlyTitle": "O Google AI Studio é usado para testes no Playground",
+        "playgroundOnlyDesc": "Teste o modelo com uma conversa fictícia no Playground. Para habilitar rascunhos de respostas a clientes na caixa de entrada, escolha um provedor como o OpenRouter e salve a configuração com o assistente de IA ativado.",
+        "openPlayground": "Abrir Playground",
+        "saveForPlayground": "Salve sua conexão do Google AI Studio para usá-la no Playground.",
+        "openRouterAutoReplyUnavailable": "As respostas automáticas do OpenRouter exigem acesso ao programa piloto. Os rascunhos na caixa de entrada ficam disponíveis quando o assistente de IA está ativado.",
         "googleTestOnly": "O Google AI Studio usa uma conversa fictícia. Um projeto gratuito do Google pode usar modelos compatíveis dentro da cota.",
         "openRouterDrafts": "O OpenRouter processa rascunhos em seus servidores. O Everloop solicita rotas sem retenção de dados para rascunhos de clientes."
       }

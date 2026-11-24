@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { AudienceConfig } from '@/lib/broadcast-audience';
 import { previewCampaign, type VariableMapping } from '@/hooks/use-broadcast-sending';
-import type { CampaignSummary } from '@/lib/whatsapp/campaign-input';
+import type { CampaignPreview } from '@/lib/whatsapp/campaign-input';
 import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,7 +58,7 @@ export function Step4ScheduleSend({
 }: Step4Props) {
   const t = useTranslations('Broadcasts.wizard');
   const [showConfirm, setShowConfirm] = useState(false);
-  const [preview, setPreview] = useState<CampaignSummary | null>(null);
+  const [campaignPreview, setCampaignPreview] = useState<CampaignPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [scheduleError, setScheduleError] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -67,8 +67,10 @@ export function Step4ScheduleSend({
   const [later, setLater] = useState(Boolean(scheduledAt));
   const [localTime, setLocalTime] = useState(() => scheduledAt ? localInputValue(new Date(scheduledAt)) : '');
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const preview = campaignPreview?.summary;
+  const sendingConfigured = campaignPreview?.sendingConfigured === true;
   const loadingReach = !preview && !previewError;
-  const canLaunch = Boolean(name.trim() && preview?.eligible && (!later || (scheduledAt && !scheduleError)));
+  const canLaunch = Boolean(sendingConfigured && name.trim() && preview?.eligible && (!later || (scheduledAt && !scheduleError)));
   const previewFailure = t('scheduleSend.toastFailedPreview');
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export function Step4ScheduleSend({
       name: '', templateId: template.id, audience, variables,
       headerMediaUrl: headerMediaUrl.trim(), headerText: headerText.trim(), buttonParams,
     }, controller.signal)
-      .then(result => { if (active) setPreview(result); })
+      .then(result => { if (active) setCampaignPreview(result); })
       .catch(error => {
         if (active) {
           setPreviewError(!controller.signal.aborted && error instanceof Error ? error.message : previewFailure);
@@ -191,6 +193,12 @@ export function Step4ScheduleSend({
         </div>
       )}
 
+      {campaignPreview && !sendingConfigured && (
+        <p className="rounded-lg border border-border bg-muted/40 p-4 text-sm" role="status">
+          {t('scheduleSend.sendingUnavailable')}
+        </p>
+      )}
+
       <details className="rounded-lg border border-border p-4">
         <summary className="cursor-pointer text-sm font-medium">{t('scheduleSend.test')}</summary>
         <p className="my-3 text-sm text-muted-foreground">{t('scheduleSend.testHint')}</p>
@@ -198,7 +206,7 @@ export function Step4ScheduleSend({
           <label className="sr-only" htmlFor="campaign-test-phone">{t('scheduleSend.testPhone')}</label>
           <Input id="campaign-test-phone" type="tel" autoComplete="tel" value={testPhone} placeholder="+14155550123"
             onChange={event => setTestPhone(event.target.value)} className="w-full max-w-xs text-base" />
-          <Button variant="outline" disabled={!name.trim() || !testPhone.trim() || testing || isProcessing} onClick={handleTest}>
+          <Button variant="outline" disabled={!sendingConfigured || !name.trim() || !testPhone.trim() || testing || isProcessing} onClick={handleTest}>
             {t('scheduleSend.test')}
           </Button>
         </div>
@@ -284,6 +292,7 @@ export function Step4ScheduleSend({
                 {t('cancel')}
               </Button>
               <Button
+                disabled={!canLaunch || isProcessing}
                 onClick={() => {
                   setShowConfirm(false);
                   onSend();

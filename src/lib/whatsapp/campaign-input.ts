@@ -20,3 +20,8 @@ export interface CampaignSummary {
   exclusions: Record<'invalid_phone' | 'marketing_opt_out' | 'marketing_consent_required' | 'invalid_template_parameters', number>;
   example: string | null;
 }
+
+export interface CampaignPreview {
+  summary: CampaignSummary;
+  sendingConfigured: boolean;
+}

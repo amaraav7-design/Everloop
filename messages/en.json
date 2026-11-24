@@ -1153,6 +1153,7 @@
         "timing": "Send time",
         "localTime": "Date and time ({zone})",
         "invalidTime": "Choose a valid time in the future.",
+        "sendingUnavailable": "Campaign sending is unavailable for this workspace until background delivery is configured. You can still review and save a draft.",
         "retryPreview": "Retry preview",
         "noEligible": "No recipients are eligible for this campaign.",
         "exclusions": {
@@ -2216,6 +2217,7 @@
     "aiConfig": {
       "title": "Agent setup",
       "description": "Bring your own AI keys. Drafts and test prompts are sent to the selected provider. OpenRouter and Google AI Studio keys are saved independently.",
+      "loading": "Loading agent setup…",
       "adminOnlyConfig": "Only admins and owners can change the AI configuration.",
       "loadFailed": "Failed to load AI configuration",
       "providerAndKey": "Provider & key",
@@ -2259,6 +2261,11 @@
       "connections": {
         "freeOnly": "Free models only",
         "freeModels": "Use the free router or a model ID ending in :free. Turning this off allows paid models on your OpenRouter account.",
+        "playgroundOnlyTitle": "Google AI Studio is for Playground testing",
+        "playgroundOnlyDesc": "Try the model with a fictional conversation in Playground. To enable Inbox drafts for customer chats, choose a provider such as OpenRouter and save it with the AI assistant enabled.",
+        "openPlayground": "Open Playground",
+        "saveForPlayground": "Save your Google AI Studio connection to use it in Playground.",
+        "openRouterAutoReplyUnavailable": "OpenRouter auto-replies require access to the auto-reply pilot. Inbox drafts are available when the AI assistant is enabled.",
         "googleTestOnly": "Google AI Studio uses a fictional conversation here. A Google project on the free tier can use supported models within its quota.",
         "openRouterDrafts": "OpenRouter processes drafts on its servers. Everloop requests zero-data-retention routing for customer drafts."
       }
