@@ -14,19 +14,29 @@ interface Turn {
   handoff?: boolean;
 }
 
+type PlaygroundMode = 'loading' | 'unconfigured' | 'unavailable' | 'sample' | 'conversation';
+
 export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   const t = useTranslations('Agents.playground');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [synthetic, setSynthetic] = useState(false);
+  const [mode, setMode] = useState<PlaygroundMode>('loading');
+  const synthetic = mode === 'sample';
 
   useEffect(() => {
     const controller = new AbortController();
     void fetch('/api/ai/config', { signal: controller.signal, cache: 'no-store' })
-      .then(response => response.ok ? response.json() : null)
-      .then(config => { if (!controller.signal.aborted) setSynthetic(config?.provider === 'google_ai_studio'); })
-      .catch(() => {});
+      .then(async response => {
+        if (!response.ok) throw new Error('Could not load AI configuration');
+        const config = await response.json();
+        if (controller.signal.aborted) return;
+        if (!config.configured) setMode('unconfigured');
+        else setMode(config.provider === 'google_ai_studio' ? 'sample' : 'conversation');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setMode('unavailable');
+      });
     return () => controller.abort();
   }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -36,6 +46,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   }, [turns, sending]);
 
   const send = async () => {
+    if (mode !== 'sample' && mode !== 'conversation') return;
     const text = synthetic ? t('sampleQuestion') : input.trim();
     if (!text || sending) return;
 
@@ -119,11 +130,17 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         {turns.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
             <Bot className="mb-2 h-8 w-8 text-muted-foreground/60" />
-            <p>{t('emptyTitle')}</p>
-            <p className="mt-1 text-xs">
-              {t(synthetic ? 'syntheticDesc' : 'emptyDesc')}
-            </p>
-            {onGoToSetup && (
+            {mode === 'loading' && <p role="status">{t('loadingConfig')}</p>}
+            {mode === 'unavailable' && <p role="status">{t('configUnavailable')}</p>}
+            {mode === 'unconfigured' && <p>{t('notConfigured')}</p>}
+            {mode === 'sample' && <p>{t('syntheticDesc')}</p>}
+            {mode === 'conversation' && (
+              <>
+                <p>{t('emptyTitle')}</p>
+                <p className="mt-1 text-xs">{t('emptyDesc')}</p>
+              </>
+            )}
+            {onGoToSetup && (mode === 'unconfigured' || mode === 'unavailable') && (
               <Button
                 variant="link"
                 size="sm"
@@ -183,33 +200,34 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
       </div>
 
       {/* Composer */}
-      {synthetic ? (
+      {mode === 'sample' && (
         <div className="border-t border-border p-3">
           <Button onClick={send} disabled={sending}>{t('runSample')}</Button>
         </div>
-      ) : (
-      <div className="flex items-end gap-2 border-t border-border p-3">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t('placeholder')}
-          rows={1}
-          className="flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
-        />
-        <Button
-          size="sm"
-          onClick={send}
-          disabled={!input.trim() || sending}
-          className="h-9 w-9 shrink-0 p-0"
-        >
-          {sending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+      )}
+      {mode === 'conversation' && (
+        <div className="flex items-end gap-2 border-t border-border p-3">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('placeholder')}
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
+          />
+          <Button
+            size="sm"
+            onClick={send}
+            disabled={!input.trim() || sending}
+            className="h-9 w-9 shrink-0 p-0"
+          >
+            {sending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       )}
     </div>
   );
