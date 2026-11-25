@@ -12,7 +12,6 @@ const h = vi.hoisted(() => ({
   sendTypingIndicator: vi.fn(),
   state: {
     conv: null as Record<string, unknown> | null,
-    autoResponders: [] as { id: string }[],
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
@@ -34,17 +33,6 @@ vi.mock('@/lib/whatsapp/meta-api', () => ({
 vi.mock('./admin-client', () => ({
   supabaseAdmin: () => ({
     from: (table: string) => {
-      if (table === 'automations') {
-        // .select().eq().eq().in().limit() → active auto-responders
-        const chain = {
-          select: () => chain,
-          eq: () => chain,
-          in: () => chain,
-          limit: () =>
-            Promise.resolve({ data: h.state.autoResponders, error: null }),
-        }
-        return chain
-      }
       if (table === 'messages') {
         const chain = {
           select: () => chain,
@@ -62,7 +50,8 @@ vi.mock('./admin-client', () => ({
         maybeSingle: () => Promise.resolve({ data: h.state.conv, error: null }),
         update: (payload: Record<string, unknown>) => {
           h.state.updatePayload = payload
-          return { eq: () => Promise.resolve({ error: null }) }
+          const write = { eq: () => write, is: () => Promise.resolve({ error: null }) }
+          return write
         },
       }
       return conversation
@@ -107,7 +96,6 @@ beforeEach(() => {
     ai_reply_count: 0,
     last_inbound_at: new Date(Date.now() - 60_000).toISOString(),
   }
-  h.state.autoResponders = []
   h.state.claim = true
   h.state.updatePayload = null
   h.state.rpcCalls = []
@@ -129,8 +117,8 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     await dispatchInboundToAiReply(ARGS)
     expect(h.state.rpcCalls).toEqual([
       {
-        name: 'claim_ai_reply_slot',
-        args: { conversation_id: 'conv-1', max_replies: 3 },
+        name: 'claim_managed_ai_reply',
+        args: { p_account: 'acct-1', p_conversation: 'conv-1', p_inbound: 'wamid.inbound-1', p_max: 3 },
       },
     ])
     expect(h.engineSendText).toHaveBeenCalledWith(
@@ -144,14 +132,6 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.retrieveKnowledge).toHaveBeenCalled()
     const systemPrompt = h.generateReply.mock.calls[0][0].systemPrompt as string
     expect(systemPrompt).toContain('Returns accepted within 30 days.')
-  })
-
-  it('stands down when an active message-level automation exists', async () => {
-    h.state.autoResponders = [{ id: 'auto-1' }]
-    await dispatchInboundToAiReply(ARGS)
-    expect(h.generateReply).not.toHaveBeenCalled()
-    expect(h.engineSendText).not.toHaveBeenCalled()
-    expect(h.sendTypingIndicator).not.toHaveBeenCalled()
   })
 
   it('does not send when the atomic slot claim loses the race', async () => {
@@ -309,6 +289,14 @@ describe('dispatchInboundToAiReply — typing indicator (#527)', () => {
 })
 
 describe('dispatchInboundToAiReply — handoff', () => {
+  it('hands an eligible DeepSeek failure to a human without sending an automated message', async () => {
+    h.loadAiConfig.mockResolvedValue(aiConfig({ provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com' }))
+    h.generateReply.mockRejectedValue(new Error('Fixture provider failure'))
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
   it('disables auto-reply, writes a summary, and does not send on handoff', async () => {
     h.generateReply.mockResolvedValue({ text: '', handoff: true })
     await dispatchInboundToAiReply(ARGS)

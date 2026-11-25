@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
-import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
+import { AI_PROVIDER_DEFAULT_MODEL, DEEPSEEK_API_BASE_URL, DEEPSEEK_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
 import { GOOGLE_FREE_TEXT_MODELS, isManagedProvider, MANAGED_PROVIDER_LABEL, type ManagedAiProvider } from '@/lib/ai/managed-providers';
 import type { AccountMember } from '@/types';
@@ -55,6 +55,14 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
 };
 
 type ProviderConnection = { provider: ManagedAiProvider; model: string; free_only: boolean };
+type SavedConfig = {
+  provider: AiProvider;
+  model: string;
+  base_url: string | null;
+  has_key: boolean;
+  is_active: boolean;
+  auto_reply_enabled: boolean;
+};
 
 export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void }) {
   const { accountId, accountRole, profileLoading } = useAuth();
@@ -64,10 +72,10 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  const [configured, setConfigured] = useState(false);
-  const [savedProvider, setSavedProvider] = useState<AiProvider | null>(null);
+  const [savedConfig, setSavedConfig] = useState<SavedConfig | null>(null);
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
   const [freeOnly, setFreeOnly] = useState(true);
   const [autoReplyPilot, setAutoReplyPilot] = useState(false);
@@ -75,7 +83,6 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
   const [model, setModel] = useState(AI_PROVIDER_DEFAULT_MODEL.openai);
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [keyEdited, setKeyEdited] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [embeddingsKey, setEmbeddingsKey] = useState('');
@@ -112,9 +119,15 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
         return;
       }
       if (data.configured) {
-        setConfigured(true);
         setProvider(data.provider);
-        setSavedProvider(data.provider);
+        setSavedConfig({
+          provider: data.provider,
+          model: data.model,
+          base_url: data.base_url,
+          has_key: data.has_key,
+          is_active: data.is_active,
+          auto_reply_enabled: data.auto_reply_enabled,
+        });
         setModel(data.model);
         setBaseUrl(data.base_url ?? '');
         setSystemPrompt(data.system_prompt ?? '');
@@ -123,8 +136,8 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
         setHandoffAgentId(data.handoff_agent_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
-        setApiKey(data.has_key ? MASKED_KEY : '');
-        setKeyEdited(false);
+        setApiKey('');
+        setTestResult(null);
         setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
         setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
         setEmbeddingsKeyEdited(false);
@@ -148,21 +161,21 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
 
   const handleProviderChange = (next: AiProvider) => {
     if (provider === next) return;
-    const saved = connections.find(connection => connection.provider === next);
-    const hasKey = Boolean(saved) || (next === savedProvider && configured);
+    const active = savedConfig?.provider === next ? savedConfig : null;
+    const connection = connections.find(saved => saved.provider === next);
     setProvider(next);
-    setModel(saved?.model ?? (next === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[next]));
-    setFreeOnly(saved?.free_only ?? true);
-    setHasStoredKey(hasKey);
-    setApiKey(hasKey ? MASKED_KEY : '');
-    setKeyEdited(false);
-    if (isManagedProvider(next)) {
-      setAutoReplyEnabled(false);
-      setIsActive(false);
-    }
+    setModel(active?.model ?? connection?.model ?? (next === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[next]));
+    setBaseUrl(active?.base_url ?? '');
+    setFreeOnly(connection?.free_only ?? true);
+    setHasStoredKey(active?.has_key ?? Boolean(connection));
+    setApiKey('');
+    setShowKey(false);
+    setTestResult(null);
+    setIsActive(active?.is_active ?? false);
+    setAutoReplyEnabled(active?.auto_reply_enabled ?? false);
   };
 
-  const keyPayload = () => (keyEdited ? apiKey.trim() : undefined);
+  const keyPayload = () => apiKey.trim() || undefined;
 
   // undefined = leave unchanged; '' typed = null (clear); text = set.
   const embeddingsKeyPayload = () =>
@@ -184,6 +197,7 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
 
   const handleTest = async () => {
     setTesting(true);
+    setTestResult(null);
     try {
       const res = await fetch('/api/ai/test', {
         method: 'POST',
@@ -197,10 +211,12 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
         }),
       });
       const data = await res.json();
-      if (res.ok) toast.success(t('testSuccess'));
-      else toast.error(data.error ?? t('testRejected'));
+      setTestResult({
+        ok: res.ok,
+        message: res.ok ? t('testSuccess') : data.error ?? t('testRejected'),
+      });
     } catch {
-      toast.error(t('testNetworkError'));
+      setTestResult({ ok: false, message: t('testNetworkError') });
     } finally {
       setTesting(false);
     }
@@ -248,13 +264,12 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
       if (res.ok) {
         invalidateAiAccountStatus();
         toast.success(t('removeSuccess'));
-        setConfigured(false);
-        setSavedProvider(null);
+        setSavedConfig(null);
+        setTestResult(null);
         setConnections([]);
         setBaseUrl('');
         setHasStoredKey(false);
         setApiKey('');
-        setKeyEdited(false);
         setIsActive(false);
         setAutoReplyEnabled(false);
         setSystemPrompt('');
@@ -280,7 +295,7 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
 
   if (!accountId) return <p role="status" className="text-sm text-muted-foreground">{t('loadFailed')}</p>;
 
-  const disabled = !canEdit || saving;
+  const disabled = !canEdit || saving || testing || removing;
   const isGoogleTest = provider === 'google_ai_studio';
   const canAutoReply = provider !== 'openrouter' || autoReplyPilot;
   const handoffMember = members.find(member => member.user_id === handoffAgentId);
@@ -339,7 +354,12 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
               <div className="space-y-2">
                 <Label htmlFor="ai-model">{t('model')}</Label>
                 {provider === 'google_ai_studio' ? (
-                  <Select value={model} onValueChange={value => { if (value) setModel(value); }} disabled={disabled}>
+                  <Select value={model} onValueChange={value => {
+                    if (value) {
+                      setModel(value);
+                      setTestResult(null);
+                    }
+                  }} disabled={disabled}>
                     <SelectTrigger id="ai-model"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {GOOGLE_FREE_TEXT_MODELS.map(choice => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}
@@ -349,7 +369,10 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                   <Input
                     id="ai-model"
                     value={model}
-                    onChange={event => setModel(event.target.value)}
+                    onChange={event => {
+                      setModel(event.target.value);
+                      setTestResult(null);
+                    }}
                     placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
                     disabled={disabled}
                   />
@@ -362,12 +385,22 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                   <Input
                     id="ai-base-url"
                     value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://api.example.com/v1"
+                    onChange={(event) => {
+                      setBaseUrl(event.target.value);
+                      setTestResult(null);
+                    }}
+                    placeholder={DEEPSEEK_API_BASE_URL}
                     disabled={disabled}
                     autoComplete="off"
                   />
                   <p className="text-xs text-muted-foreground">{t('baseUrlHint')}</p>
+                  <Button variant="outline" size="sm" disabled={disabled} onClick={() => {
+                    setBaseUrl(DEEPSEEK_API_BASE_URL);
+                    setModel(DEEPSEEK_DEFAULT_MODEL);
+                    setTestResult(null);
+                  }}>
+                    {t('connections.deepSeekPreset')}
+                  </Button>
                 </div>
               )}
             </div>
@@ -378,7 +411,10 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                   <Label htmlFor="openrouter-free-only">{t('connections.freeOnly')}</Label>
                   <p className="text-xs text-muted-foreground">{t('connections.freeModels')}</p>
                 </div>
-                <Switch id="openrouter-free-only" checked={freeOnly} onCheckedChange={setFreeOnly} disabled={disabled} />
+                <Switch id="openrouter-free-only" checked={freeOnly} onCheckedChange={checked => {
+                  setFreeOnly(checked);
+                  setTestResult(null);
+                }} disabled={disabled} />
               </div>
             )}
             {isManagedProvider(provider) && (
@@ -395,17 +431,11 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                     id="ai-key"
                     type={showKey ? 'text' : 'password'}
                     value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setKeyEdited(true);
+                    onChange={(event) => {
+                      setApiKey(event.target.value);
+                      setTestResult(null);
                     }}
-                    onFocus={() => {
-                      if (!keyEdited && hasStoredKey) {
-                        setApiKey('');
-                        setKeyEdited(true);
-                      }
-                    }}
-                    placeholder={KEY_PLACEHOLDER[provider]}
+                    placeholder={hasStoredKey ? MASKED_KEY : KEY_PLACEHOLDER[provider]}
                     disabled={disabled}
                     autoComplete="off"
                   />
@@ -425,7 +455,7 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                 <Button
                   variant="outline"
                   onClick={handleTest}
-                  disabled={disabled || testing}
+                  disabled={disabled || !model.trim() || (!hasStoredKey && !keyPayload())}
                 >
                   {testing ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -435,6 +465,14 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
                   {t('testKey')}
                 </Button>
               </div>
+              {hasStoredKey && (
+                <p className="text-xs text-muted-foreground">{t('connections.savedKey')}</p>
+              )}
+              {testResult && (
+                <p role="status" className={testResult.ok ? 'text-sm text-foreground' : 'text-sm text-destructive'}>
+                  {testResult.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -478,7 +516,7 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
               <CardDescription>{t('connections.playgroundOnlyDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {savedProvider === provider && hasStoredKey ? (
+              {savedConfig?.provider === provider && hasStoredKey ? (
                 <Button variant="outline" onClick={onOpenPlayground}>{t('connections.openPlayground')}</Button>
               ) : (
                 <p className="text-sm text-muted-foreground">{t('connections.saveForPlayground')}</p>
@@ -605,7 +643,7 @@ export function AiConfig({ onOpenPlayground }: { onOpenPlayground: () => void })
         />
 
         <div className="flex items-center justify-between">
-          {configured ? (
+          {savedConfig ? (
             <Button
               variant="ghost"
               onClick={handleRemove}

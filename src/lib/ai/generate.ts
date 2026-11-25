@@ -84,7 +84,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
         messages: messages.slice(-10).map(message => ({ ...message, content: redactAiText(message.content.slice(0, 2000)) })),
       }
       result = await generateOpenAiCompatible({ ...scopedArgs, baseUrl: MANAGED_PROVIDER_URL[provider] }, {
-        body: openRouterRouting, label: MANAGED_PROVIDER_LABEL[provider], suppressUpstreamError: true,
+        body: openRouterRouting, label: MANAGED_PROVIDER_LABEL[provider],
         ...(provider === 'openrouter' ? { errorForStatus: openRouterHttpError } : {}),
       })
       break

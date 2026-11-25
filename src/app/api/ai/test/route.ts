@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       if (err instanceof AiError) {
         return NextResponse.json(
           { error: err.message, code: err.code },
-          { status: 400 },
+          { status: err.status },
         )
       }
       console.error('[ai/test] validation error:', err)

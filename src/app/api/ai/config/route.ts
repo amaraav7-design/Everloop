@@ -57,12 +57,19 @@ export async function GET() {
     // The keys are selected only to derive the has_* flags; neither is
     // returned to the client.
     const { api_key, embeddings_api_key, ...safe } = data
+    const hasKey = isManagedProvider(safe.provider)
+      ? Boolean(await readAiConnection(accountId, safe.provider))
+      : Boolean(api_key)
+    const isActive = hasKey && safe.is_active && safe.provider !== 'google_ai_studio'
     return NextResponse.json({
-      configured: true,
-      has_key: isManagedProvider(safe.provider) || !!api_key,
-      has_embeddings_key: !!embeddings_api_key,
       ...safe,
-    })
+      configured: true,
+      has_key: hasKey,
+      has_embeddings_key: Boolean(embeddings_api_key),
+      is_active: isActive,
+      auto_reply_enabled: isActive && safe.auto_reply_enabled &&
+        (safe.provider !== 'openrouter' || managedAutoReplyEnabled(accountId)),
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
     return toErrorResponse(err)
   }
@@ -215,7 +222,7 @@ export async function POST(request: Request) {
         if (err instanceof AiError) {
           return NextResponse.json(
             { error: err.message, code: err.code },
-            { status: 400 },
+            { status: err.status },
           )
         }
         console.error('[ai/config POST] validation error:', err)

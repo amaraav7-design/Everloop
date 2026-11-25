@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { generateOpenAiCompatible, normalizeOpenAiCompatibleBaseUrl } from './openai-compatible'
 import { AiError } from '../types'
 
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn().mockResolvedValue([{ address: '1.1.1.1', family: 4 }]),
+}))
+
 describe('normalizeOpenAiCompatibleBaseUrl', () => {
   it('appends /chat/completions to a base URL', () => {
     expect(normalizeOpenAiCompatibleBaseUrl('https://8.8.8.8/v1')).toBe(
@@ -79,6 +83,77 @@ describe('normalizeOpenAiCompatibleBaseUrl', () => {
   })
 })
 
+describe('DeepSeek chat configuration', () => {
+  const args = {
+    apiKey: 'fictional-key',
+    model: 'deepseek-flash',
+    systemPrompt: 'Fictional test',
+    messages: [{ role: 'user' as const, content: 'ping' }],
+    timeoutMs: 1000,
+    baseUrl: 'https://api.deepseek.com',
+  }
+
+  it('rejects the key-management dashboard before transmitting a credential', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(generateOpenAiCompatible({ ...args, baseUrl: 'https://platform.deepseek.com/api_keys' }))
+        .rejects.toMatchObject({ code: 'invalid_base_url', message: expect.stringContaining('https://api.deepseek.com') })
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('normalizes the official DeepSeek API URL and its legacy aliases to the same endpoint', () => {
+    for (const baseUrl of [args.baseUrl, args.baseUrl + '/v1/', args.baseUrl + '/v1/chat/completions']) {
+      expect(normalizeOpenAiCompatibleBaseUrl(baseUrl)).toBe(args.baseUrl + '/chat/completions')
+    }
+    expect(() => normalizeOpenAiCompatibleBaseUrl(args.baseUrl + '/anthropic')).toThrow(/DeepSeek chat/)
+  })
+
+  it('uses non-thinking mode for a short WhatsApp reply on the official endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: 'OK' } }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(generateOpenAiCompatible({ ...args, baseUrl: args.baseUrl + '/v1' }))
+        .resolves.toMatchObject({ text: 'OK' })
+      expect(fetchMock).toHaveBeenCalledOnce()
+      expect(fetchMock.mock.calls[0][0]).toBe(args.baseUrl + '/chat/completions')
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+        model: 'deepseek-flash', max_tokens: 1024, thinking: { type: 'disabled' },
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it.each([[402, 'provider_budget'], [404, 'provider_model_unavailable']] as const)(
+    'reports DeepSeek HTTP %s without exposing upstream error text',
+    async (status, code) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
+        error: { message: 'Fictional upstream private diagnostic' },
+      }, { status })))
+      try {
+        await expect(generateOpenAiCompatible(args)).rejects.toMatchObject({ code, status })
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    },
+  )
+
+  it('reports an output limit as incomplete rather than a connection failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
+      choices: [{ finish_reason: 'length', message: { content: null } }],
+    })))
+    try {
+      await expect(generateOpenAiCompatible(args)).rejects.toMatchObject({ code: 'incomplete_response' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('generateOpenAiCompatible', () => {
   it.each([404, 200])('maps a managed provider route error without exposing the upstream payload (HTTP %s)', async (status) => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({
@@ -95,7 +170,6 @@ describe('generateOpenAiCompatible', () => {
         baseUrl: 'https://8.8.8.8/v1',
       }, {
         label: 'OpenRouter',
-        suppressUpstreamError: true,
         errorForStatus: status => status === 404
           ? new AiError('No eligible model route', { code: 'provider_route_unavailable', status: 503 })
           : undefined,

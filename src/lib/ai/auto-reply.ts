@@ -62,24 +62,7 @@ export async function dispatchInboundToAiReply(
     const db = supabaseAdmin()
 
     const config = await loadAiConfig(db, accountId)
-    if (!config || !config.autoReplyEnabled) return
-
-    // Deterministic, user-configured responders win over the LLM — the
-    // caller already excludes messages a Flow consumed. Message-level
-    // automations (`new_message_received` / `keyword_match`) are
-    // dispatched independently for this same inbound and may send their
-    // own reply, so if the account has any active one we stand down to
-    // avoid double-texting the customer. (Relationship triggers like
-    // `first_inbound_message` don't count — they're not per-message
-    // auto-responders.)
-    const { data: autoResponders } = await db
-      .from('automations')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('is_active', true)
-      .in('trigger_type', ['new_message_received', 'keyword_match'])
-      .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
+    if (!config || !config.autoReplyEnabled || (isManagedProvider(config.provider) && !inboundMessageId)) return
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
@@ -151,25 +134,19 @@ export async function dispatchInboundToAiReply(
     try {
       generation = await generateReply({ config, systemPrompt, messages })
     } catch (error) {
-      if (!isManagedProvider(config.provider)) throw error
       await logAiUsage(db, {
         accountId, conversationId, mode: 'auto_reply', provider: config.provider, model: config.model, usage: null,
         outcome: error instanceof AiError && error.code === 'rate_limited' ? 'rate_limited' : 'provider_error',
       })
-      await handOff()
+      if (!inboundMessageId || !(await hasNewerInbound(db, conversationId, inboundMessageId))) await handOff()
       return
     }
     const { text, handoff, usage, resolvedModel } = generation
     await logAiUsage(db, { accountId, conversationId, mode: 'auto_reply', provider: config.provider, model: resolvedModel ?? config.model, usage })
+    if (inboundMessageId && (await hasNewerInbound(db, conversationId, inboundMessageId))) return
+
     if (handoff || !text) {
       await handOff()
-      return
-    }
-
-    if (
-      inboundMessageId &&
-      (await hasNewerInbound(db, conversationId, inboundMessageId))
-    ) {
       return
     }
 
@@ -178,9 +155,7 @@ export async function dispatchInboundToAiReply(
     // another inbound just took the last slot, `claimed` is false and we
     // skip the send. (We consume a slot slightly before the send lands —
     // fail-safe: under-reply rather than over-reply.)
-    const managed = isManagedProvider(config.provider)
-    if (managed && !inboundMessageId) return
-    const { data: claimed, error: claimErr } = managed
+    const { data: claimed, error: claimErr } = inboundMessageId
       ? await db.rpc('claim_managed_ai_reply', {
         p_account: accountId, p_conversation: conversationId, p_inbound: inboundMessageId,
         p_max: config.autoReplyMaxPerConversation,
@@ -191,7 +166,7 @@ export async function dispatchInboundToAiReply(
       // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
       // service role, or the migration not applied. Log it loudly: a
       // silent return makes "auto-reply never fires" undiagnosable.
-      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
+      console.error('[ai auto-reply] reply claim failed:', claimErr)
       return
     }
     if (claimed !== true) return

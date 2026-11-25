@@ -1,5 +1,8 @@
 import type { AiProvider } from './types'
 
+export const DEEPSEEK_API_BASE_URL = 'https://api.deepseek.com'
+export const DEEPSEEK_DEFAULT_MODEL = 'deepseek-flash'
+
 // ============================================================
 // Tunables + prompt scaffold for the AI reply assistant.
 // ============================================================

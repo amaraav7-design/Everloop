@@ -431,10 +431,10 @@ beforeEach(() => {
   h.applyMessageStatus.mockResolvedValue([])
   h.runAutomationsForTrigger.mockImplementation(() => {
     h.state.automationStarted++
-    return new Promise<void>((resolve) => {
+    return new Promise<'unmatched'>((resolve) => {
       setTimeout(() => {
         h.state.automationCompleted++
-        resolve()
+        resolve('unmatched')
       }, 0)
     })
   })
@@ -1101,6 +1101,18 @@ describe('inbound webhook: automation waiting for a reply', () => {
     expect(triggersFired()).toEqual(
       expect.arrayContaining(['new_message_received', 'keyword_match']),
     )
+  })
+
+  it('offers a plain inbound to AI when no content automation matched', async () => {
+    await runWebhook()
+    expect(h.dispatchInboundToAiReply).toHaveBeenCalledOnce()
+  })
+
+  it.each(['matched', 'unavailable'] as const)('gives a content automation priority when dispatch reports %s', async (outcome) => {
+    h.runAutomationsForTrigger.mockImplementation(async ({ triggerType }) =>
+      triggerType === 'keyword_match' ? outcome : 'unmatched')
+    await runWebhook()
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
   })
 
   it('suppresses content triggers and AI reply when a waiting automation took it', async () => {

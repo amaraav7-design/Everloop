@@ -14,7 +14,7 @@ type Tab = 'playground' | 'setup' | 'usage';
 
 export default function AgentsPage() {
   const t = useTranslations('Agents');
-  const { accountRole } = useAuth();
+  const { accountId, accountRole } = useAuth();
   const canViewUsage = accountRole ? canEditSettings(accountRole) : false;
   const [tab, setTab] = useState<Tab>('playground');
   const [decided, setDecided] = useState(false);
@@ -71,11 +71,11 @@ export default function AgentsPage() {
           </TabsList>
 
           <TabsContent value="playground" className="mt-4">
-            <AiPlayground onGoToSetup={() => setTab('setup')} />
+            <AiPlayground key={accountId} onGoToSetup={() => setTab('setup')} />
           </TabsContent>
 
           <TabsContent value="setup" className="mt-4">
-            <AiConfig onOpenPlayground={() => setTab('playground')} />
+            <AiConfig key={accountId} onOpenPlayground={() => setTab('playground')} />
           </TabsContent>
 
           {canViewUsage && (

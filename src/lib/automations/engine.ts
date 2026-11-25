@@ -65,11 +65,12 @@ export interface DispatchInput {
  * Fire all active automations matching the given trigger for an
  * account.
  *
- * Must never throw — callers use fire-and-forget from the webhook.
+ * Report whether a rule matched so the inbound dispatcher can give it priority.
+ * Must never throw.
  * All errors are caught and logged; per-automation failures are
  * recorded into automation_logs with status='failed'.
  */
-export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
+export async function runAutomationsForTrigger(input: DispatchInput): Promise<'matched' | 'unmatched' | 'unavailable'> {
   try {
     const db = supabaseAdmin()
 
@@ -89,11 +90,11 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
         .maybeSingle()
       if (ownErr) {
         console.error('[automations] contact ownership check failed:', ownErr)
-        return
+        return 'unavailable'
       }
       if (!owned) {
         console.warn('[automations] contact not in account, refusing dispatch', input.contactId)
-        return
+        return 'unavailable'
       }
     }
 
@@ -112,14 +113,14 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
         .maybeSingle()
       if (convErr) {
         console.error('[automations] conversation ownership check failed:', convErr)
-        return
+        return 'unavailable'
       }
       if (!conv) {
         console.warn(
           '[automations] conversation not in account, refusing dispatch',
           input.context.conversation_id,
         )
-        return
+        return 'unavailable'
       }
     }
 
@@ -132,20 +133,23 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
 
     if (error) {
       console.error('[automations] fetch failed:', error)
-      return
+      return 'unavailable'
     }
-    if (!automations || automations.length === 0) return
-
-    for (const automation of automations as Automation[]) {
+    let matched = false
+    for (const automation of (automations ?? []) as Automation[]) {
       if (!triggerMatches(automation, input.context)) continue
+      // A matched run may have sent before failing on a later step.
+      matched = true
       try {
         await executeAutomation(automation, input)
       } catch (err) {
         console.error('[automations] execute failed:', automation.id, err)
       }
     }
+    return matched ? 'matched' : 'unmatched'
   } catch (err) {
     console.error('[automations] dispatch failed:', err)
+    return 'unavailable'
   }
 }
 

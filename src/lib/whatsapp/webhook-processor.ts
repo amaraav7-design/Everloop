@@ -747,8 +747,9 @@ async function processMessage(
   // logging zero steps. `runAutomationsForTrigger` owns its own try/catch
   // and never throws; the `.catch` is belt-and-braces so one trigger
   // type's failure can't skip the rest of the loop.
+  let contentAutomationTakesPriority = false
   for (const triggerType of automationTriggers) {
-    await runAutomationsForTrigger({
+    const result = await runAutomationsForTrigger({
       accountId,
       triggerType,
       contactId: contactRecord.id,
@@ -759,7 +760,13 @@ async function processMessage(
         // trigger's exact-id match.
         interactive_reply_id: interactiveReplyId ?? undefined,
       },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    }).catch((err) => {
+      console.error('[automations] dispatch failed:', err)
+      return 'unavailable' as const
+    })
+    if ((triggerType === 'new_message_received' || triggerType === 'keyword_match') && result !== 'unmatched') {
+      contentAutomationTakesPriority = true
+    }
   }
 
   // AI auto-reply. Runs only for plain-text inbound the deterministic
@@ -767,7 +774,7 @@ async function processMessage(
   // the account has enabled it. Awaited inside `after()` (same reason as
   // the webhook dispatch below); `dispatchInboundToAiReply` owns its
   // eligibility gates + try/catch and never throws.
-  if (!contentConsumed && !interactiveReplyId && inboundText.trim()) {
+  if (!contentConsumed && !contentAutomationTakesPriority && !interactiveReplyId && inboundText.trim()) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,
