@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
@@ -11,48 +12,23 @@ import {
   type SettingsSection,
 } from './settings-sections';
 
-// Width at/above which the rail is a vertical column (already in view, so
-// no auto-scroll needed). Mirrors the Tailwind `lg:` breakpoint that
-// drives the row→column switch in the markup below — keep the two in sync.
-const RAIL_DESKTOP_MIN_PX = 1024;
-
-/**
- * The settings left rail — grouped, vertical on desktop and a
- * horizontal scroller on narrow screens (mirrors the mockup's ≤920px
- * behaviour). The active item auto-scrolls into view when the rail is
- * horizontal so a deep-linked section is never off-screen.
- */
 export function SettingsRail({
   active,
   onSelect,
   hints,
+  className,
 }: {
   active: SettingsSection;
+  className?: string;
   onSelect: (section: SettingsSection) => void;
   hints?: Partial<Record<SettingsSection, ReactNode>>;
 }) {
   const t = useTranslations('Settings');
-  const activeRef = useRef<HTMLButtonElement>(null);
-
-  // When horizontal (mobile), keep the active chip in view. On desktop
-  // the rail is a static column, so skip.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia(`(min-width: ${RAIL_DESKTOP_MIN_PX}px)`).matches) return;
-    activeRef.current?.scrollIntoView({
-      inline: 'center',
-      block: 'nearest',
-      behavior: 'smooth',
-    });
-  }, [active]);
-
   return (
     <nav
       aria-label={t('sectionsNav')}
       className={cn(
-        'flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        'border-b border-border',
-        'lg:sticky lg:top-0 lg:flex-col lg:overflow-visible lg:border-b-0 lg:pb-0',
+        'flex flex-col gap-3', className,
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {
@@ -62,10 +38,10 @@ export function SettingsRail({
         return (
           <div
             key={group}
-            className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5"
+            className={cn("overflow-hidden rounded-xl border bg-card lg:rounded-none lg:border-0 lg:bg-transparent", group === "top" && "hidden lg:block")}
           >
             {label ? (
-              <div className="hidden px-3 pt-3.5 pb-1.5 text-[11px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:block">
+              <div className="border-b bg-card-2 px-3 py-2 text-xs font-semibold text-muted-foreground lg:border-0 lg:bg-transparent lg:pt-2 lg:pb-1.5">
                 {t(`groups.${group}`)}
               </div>
             ) : null}
@@ -76,20 +52,19 @@ export function SettingsRail({
               return (
                 <button
                   key={s}
-                  ref={isActive ? activeRef : undefined}
                   type="button"
                   onClick={() => onSelect(s)}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
-                    'lg:w-full',
+                    'flex min-h-11 w-full items-center gap-2.5 border-b px-3 py-2 text-left text-sm font-medium transition-colors last:border-b-0 lg:min-h-9 lg:rounded-lg lg:border-b-0',
                     isActive
                       ? 'bg-primary-soft text-primary'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
-                  <Icon className="size-4 shrink-0" />
+                  <Icon className="size-4 shrink-0" aria-hidden="true" />
                   <span className="flex-1">{t(`sections.${s}`)}</span>
+                  <ChevronRight className="size-4 text-muted-foreground lg:hidden" aria-hidden="true" />
                   {hints?.[s] != null ? (
                     <span
                       className={cn(

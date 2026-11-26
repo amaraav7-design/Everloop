@@ -233,7 +233,7 @@ export function TemplatePicker({
                           {t.category}
                         </Badge>
                         {t.language && (
-                          <span className="text-[10px] uppercase text-muted-foreground">
+                          <span className="text-[10px] text-muted-foreground">
                             {t.language}
                           </span>
                         )}

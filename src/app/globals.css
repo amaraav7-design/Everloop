@@ -1,8 +1,10 @@
+/* Hallmark · app screen · Evergreen · functional motion · v2.0.0 */
+/* The queue, record and action should read in that order at every width. */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-mode="dark"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -52,6 +54,7 @@
   --color-status-warning: var(--status-warning);
   --color-status-serious: var(--status-serious);
   --color-status-critical: var(--status-critical);
+  --color-status-info: var(--status-info);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -61,198 +64,154 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ============================================================
- * THEMING — two orthogonal dimensions
- *
- *   1. MODE   (light / dark)  → neutral surfaces. Selected with
- *      `document.documentElement.dataset.mode`. Defaults to dark.
- *   2. ACCENT (violet / …)    → the primary color only. Selected
- *      with `document.documentElement.dataset.theme`.
- *
- * The two compose: any accent works in either mode. Neutral
- * tokens (background / card / border / muted / sidebar surfaces /
- * neutral charts / radius) live in the MODE blocks below; accent
- * tokens (--primary*, --ring, --chart-1, --sidebar-primary*,
- * --sidebar-ring) live in the ACCENT blocks. They set disjoint
- * variables, so cascade order between them doesn't matter.
- *
- * `:root` carries the dark-mode + violet defaults so a visitor
- * renders correctly before JS runs; the boot script in
- * layout.tsx replays the saved mode + accent before first paint.
- *
- * The three `--primary-*` extras (hover / soft / soft-2) feed
- * hovered primary buttons and tinted-primary surfaces (sidebar
- * active pill, validation badges).
- *
- * Token shapes come straight from the design handoff at
- * project/Color Themes.html — change one, change the other.
- * ============================================================ */
-
-/* ---- MODE: neutral surfaces ---- */
+/* Mode owns the surfaces. Accent choices own interaction colors. */
 
 :root,
 html[data-mode="dark"] {
-  --background: oklch(0.13 0.01 260);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.18 0.01 260);
-  --card-2: oklch(0.205 0.01 260);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.18 0.01 260);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.65 0.01 260);
-  --accent: oklch(0.22 0.01 260);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.28 0.01 260);
-  --input: oklch(0.28 0.01 260);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.16 0.01 260);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.22 0.01 260);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.28 0.01 260);
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #e05252;
+  color-scheme: dark;
+  --background: #111714;
+  --foreground: #f1f5ee;
+  --card: #181f1b;
+  --card-2: #1d2721;
+  --card-foreground: var(--foreground);
+  --popover: #202a24;
+  --popover-foreground: var(--foreground);
+  --secondary: #27332b;
+  --secondary-foreground: var(--foreground);
+  --muted: #27332b;
+  --muted-foreground: #aab8ad;
+  --accent: #2c3930;
+  --accent-foreground: var(--foreground);
+  --destructive: #ff9b95;
+  --border: #35433a;
+  --input: #435249;
+  --chart-2: #83c9c4;
+  --chart-3: #e0b476;
+  --chart-4: #b5a5de;
+  --chart-5: #778c80;
+  --sidebar: #16201a;
+  --status-good: #9bdbad;
+  --status-warning: #f2cb88;
+  --status-serious: #f0a580;
+  --status-critical: #ff9b95;
+  --status-info: #9fcde8;
 }
 
 html[data-mode="light"] {
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
-  --card: oklch(1 0 0);
-  --card-2: oklch(0.985 0.002 260);
-  --card-foreground: oklch(0.21 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.01 260);
-  --secondary: oklch(0.967 0.003 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.967 0.003 260);
-  --muted-foreground: oklch(0.52 0.015 260);
-  --accent: oklch(0.96 0.004 260);
-  --accent-foreground: oklch(0.25 0.01 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.004 260);
-  --input: oklch(0.922 0.004 260);
-  --chart-2: oklch(0.6 0.1 260);
-  --chart-3: oklch(0.7 0.06 260);
-  --chart-4: oklch(0.8 0.04 260);
-  --chart-5: oklch(0.87 0.03 260);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.002 260);
-  --sidebar-foreground: oklch(0.21 0.01 260);
-  --sidebar-accent: oklch(0.96 0.004 260);
-  --sidebar-accent-foreground: oklch(0.25 0.01 260);
-  --sidebar-border: oklch(0.922 0.004 260);
-  --status-good: #0b7f0b;
-  --status-warning: #946100;
-  --status-serious: #c2532a;
-  --status-critical: #c43232;
+  color-scheme: light;
+  --background: #f4f6ef;
+  --foreground: #1b271f;
+  --card: #fdfefb;
+  --card-2: #f1f4ed;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: #e9efe6;
+  --secondary-foreground: var(--foreground);
+  --muted: #e9efe6;
+  --muted-foreground: #526358;
+  --accent: #e7eee4;
+  --accent-foreground: var(--foreground);
+  --destructive: #a72c31;
+  --border: #d6e0d5;
+  --input: #899c90;
+  --chart-2: #337d78;
+  --chart-3: #966225;
+  --chart-4: #7652a7;
+  --chart-5: #64786b;
+  --sidebar: #edf2e9;
+  --status-good: #216442;
+  --status-warning: #805709;
+  --status-serious: #9a4926;
+  --status-critical: #a72c31;
+  --status-info: #275d83;
 }
 
-/* ---- ACCENT: primary color ---- */
-
-:root,
-html[data-theme="violet"] {
-  --primary: oklch(0.526 0.247 293);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.6 0.22 293);
-  --primary-soft: oklch(0.526 0.247 293 / 0.12);
-  --primary-soft-2: oklch(0.526 0.247 293 / 0.2);
-  --ring: oklch(0.526 0.247 293);
-  --chart-1: oklch(0.526 0.247 293);
-  --sidebar-primary: oklch(0.526 0.247 293);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.526 0.247 293);
-}
-
-html[data-theme="evergreen"] {
+:root {
+  --radius: 0.65rem;
+  --feedback: 120ms;
+  --disclosure: 180ms;
+  --panel: 220ms;
   --primary: #c5ed8b;
   --primary-foreground: #19291d;
   --primary-hover: #d6f6ad;
-  --primary-soft: #c5ed8b1f;
-  --primary-soft-2: #c5ed8b33;
-  --ring: #c5ed8b;
-  --chart-1: #c5ed8b;
-  --sidebar-primary: #c5ed8b;
-  --sidebar-primary-foreground: #19291d;
-  --sidebar-ring: #c5ed8b;
+  --primary-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --primary-soft-2: color-mix(in srgb, var(--primary) 17%, transparent);
+  --ring: var(--primary);
+  --chart-1: var(--primary);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
+  --brand-field: #173e2c;
+  --brand-ink: #c5ed8b;
+}
+
+html[data-theme="violet"] {
+  --primary: #c0aaff;
+  --primary-foreground: #271743;
+  --primary-hover: #d1bfff;
+}
+
+html[data-theme="emerald"] {
+  --primary: #84dfba;
+  --primary-foreground: #12352b;
+  --primary-hover: #a0edcf;
+}
+
+html[data-theme="cobalt"] {
+  --primary: #a7c5ff;
+  --primary-foreground: #182d50;
+  --primary-hover: #bed4ff;
+}
+
+html[data-theme="amber"] {
+  --primary: #f0c77e;
+  --primary-foreground: #38270d;
+  --primary-hover: #f9d99f;
+}
+
+html[data-theme="rose"] {
+  --primary: #f3a9b9;
+  --primary-foreground: #4b1927;
+  --primary-hover: #ffc1ce;
+}
+
+html[data-mode="light"][data-theme] {
+  --primary-foreground: #fff;
 }
 
 html[data-mode="light"][data-theme="evergreen"] {
   --primary: #216442;
-  --primary-foreground: #fff;
   --primary-hover: #194d33;
-  --primary-soft: #2164421f;
-  --primary-soft-2: #21644233;
-  --ring: #216442;
-  --chart-1: #216442;
-  --sidebar-primary: #216442;
-  --sidebar-primary-foreground: #fff;
-  --sidebar-ring: #216442;
 }
 
-html[data-theme="emerald"] {
-  --primary: oklch(0.62 0.16 162);
-  --primary-foreground: oklch(0.16 0.02 162);
-  --primary-hover: oklch(0.68 0.15 162);
-  --primary-soft: oklch(0.62 0.16 162 / 0.12);
-  --primary-soft-2: oklch(0.62 0.16 162 / 0.22);
-  --ring: oklch(0.62 0.16 162);
-  --chart-1: oklch(0.62 0.16 162);
-  --chart-2: oklch(0.7 0.14 195);
-  --sidebar-primary: oklch(0.62 0.16 162);
-  --sidebar-primary-foreground: oklch(0.16 0.02 162);
-  --sidebar-ring: oklch(0.62 0.16 162);
+html[data-mode="light"][data-theme="violet"] {
+  --primary: #6441a1;
+  --primary-hover: #513288;
 }
 
-html[data-theme="cobalt"] {
-  --primary: oklch(0.585 0.2 254);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.66 0.18 254);
-  --primary-soft: oklch(0.585 0.2 254 / 0.12);
-  --primary-soft-2: oklch(0.585 0.2 254 / 0.22);
-  --ring: oklch(0.585 0.2 254);
-  --chart-1: oklch(0.585 0.2 254);
-  --chart-2: oklch(0.7 0.15 220);
-  --sidebar-primary: oklch(0.585 0.2 254);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.585 0.2 254);
+html[data-mode="light"][data-theme="emerald"] {
+  --primary: #14674f;
+  --primary-hover: #10513e;
 }
 
-html[data-theme="amber"] {
-  --primary: oklch(0.745 0.16 65);
-  --primary-foreground: oklch(0.18 0.03 65);
-  --primary-hover: oklch(0.8 0.15 65);
-  --primary-soft: oklch(0.745 0.16 65 / 0.12);
-  --primary-soft-2: oklch(0.745 0.16 65 / 0.22);
-  --ring: oklch(0.745 0.16 65);
-  --chart-1: oklch(0.745 0.16 65);
-  --chart-2: oklch(0.7 0.15 35);
-  --sidebar-primary: oklch(0.745 0.16 65);
-  --sidebar-primary-foreground: oklch(0.18 0.03 65);
-  --sidebar-ring: oklch(0.745 0.16 65);
+html[data-mode="light"][data-theme="cobalt"] {
+  --primary: #305ea4;
+  --primary-hover: #234b89;
 }
 
-html[data-theme="rose"] {
-  --primary: oklch(0.645 0.22 16);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.71 0.2 16);
-  --primary-soft: oklch(0.645 0.22 16 / 0.12);
-  --primary-soft-2: oklch(0.645 0.22 16 / 0.22);
-  --ring: oklch(0.645 0.22 16);
-  --chart-1: oklch(0.645 0.22 16);
-  --chart-2: oklch(0.7 0.18 340);
-  --sidebar-primary: oklch(0.645 0.22 16);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.645 0.22 16);
+html[data-mode="light"][data-theme="amber"] {
+  --primary: #815709;
+  --primary-hover: #684507;
+}
+
+html[data-mode="light"][data-theme="rose"] {
+  --primary: #9e3a57;
+  --primary-hover: #852c46;
 }
 
 @layer base {
@@ -261,6 +220,12 @@ html[data-theme="rose"] {
   }
   body {
     @apply bg-background text-foreground;
+  }
+  html, body {
+    overflow-x: clip;
+  }
+  h1, h2, h3 {
+    overflow-wrap: break-word;
   }
   .recharts-cartesian-axis-tick-value {
     fill: var(--muted-foreground);
@@ -295,4 +260,49 @@ html[data-theme="rose"] {
 
 html[data-everloop-keyboard="open"] .everloop-mobile-nav {
   display: none;
+}
+
+
+:where(a[href], button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (width < 64rem) {
+  .everloop-shell:has([data-inbox-thread="true"]) .everloop-header,
+  .everloop-shell:has([data-inbox-thread="true"]) .everloop-mobile-nav {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --feedback: 0ms;
+    --disclosure: 0ms;
+    --panel: 0ms;
+  }
+  :where(.everloop-shell, .everloop-auth, [data-slot="dialog-content"], [data-slot="sheet-content"]) *,
+  :is([data-slot="dialog-content"], [data-slot="dialog-overlay"], [data-slot="sheet-content"],
+      [data-slot="sheet-overlay"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+      [data-slot="select-content"], [data-slot="popover-content"], [data-slot="tooltip-content"]) {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+@media (pointer: coarse) {
+  [data-slot="button"]:where([data-size="default"], [data-size="lg"], [data-size="icon-lg"]),
+  :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="select-item"]) {
+    min-block-size: 2.75rem;
+  }
+  [data-slot="dialog-close"], [data-slot="sheet-close"] {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+  }
+}
+
+.everloop-auth [data-slot="input"] {
+  min-block-size: 2.75rem;
 }

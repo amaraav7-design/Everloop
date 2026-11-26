@@ -83,7 +83,7 @@ function ImportPreviewTags({
   const t = useTranslations('Contacts.importModal');
 
   if (tagNames.length === 0) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">–</span>;
   }
 
   return (
@@ -469,7 +469,7 @@ export function ImportModal({
                 fileInputRef.current?.click();
             }}
             className={cn(
-              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-5 transition-all',
+              'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-5 transition-colors',
               file
                 ? 'border-primary/35 bg-primary/[0.04]'
                 : 'hover:border-primary/40 border-border/80 bg-background/40 hover:bg-background/70'
@@ -518,7 +518,7 @@ export function ImportModal({
           {preview.length > 0 && !result && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                <p className="text-[11px] font-semibold text-muted-foreground">
                   {t('preview', { count: preview.length })}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -662,7 +662,7 @@ export function ImportModal({
 
               {result.failedDetails.length > 0 && (
                 <div className="mt-3 space-y-1 border-t border-border/80 pt-3">
-                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                  <p className="text-[11px] font-semibold text-muted-foreground">
                     {t('failedRowsHeading')}
                   </p>
                   <ul className="max-h-32 space-y-1 overflow-y-auto text-xs">

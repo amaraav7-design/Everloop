@@ -54,6 +54,7 @@ export function ConversationList({
   initialFilter = "all",
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
+  const tSidebar = useTranslations("Sidebar");
   const { accountId } = useAuth();
   const [requestError, setRequestError] = useState(false);
   const [requestId, setRequestId] = useState(0);
@@ -227,27 +228,30 @@ export function ConversationList({
   );
 
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
+  const Heading = activeConversationId ? "h2" : "h1";
 
   return (
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-72 min-[1440px]:w-80">
       {/* Search + Filter */}
-      <div className="space-y-2 border-b border-border p-3">
+      <div className="space-y-3 border-b px-3 py-3">
+        <Heading className="px-1 text-xl font-semibold tracking-tight">{tSidebar("inbox")}</Heading>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={handleSearchChange}
             placeholder={t("searchPlaceholder")}
+            aria-label={t("searchPlaceholder")}
             className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
+            <DropdownMenuTrigger className="inline-flex items-center justify-center min-h-9 gap-1.5 px-2.5 text-xs pointer-coarse:min-h-11 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
                 {activeFilter?.label ?? t("filterAll")}
                 <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
@@ -276,7 +280,7 @@ export function ConversationList({
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  "inline-flex items-center justify-center min-h-9 gap-1.5 px-2.5 text-xs pointer-coarse:min-h-11 rounded-md hover:bg-muted",
                   selectedTagIds.length > 0
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -474,10 +478,13 @@ function ConversationItem({
 
   return (
     <button
+      id={`conversation-${conversation.id}`}
+      type="button"
+      aria-current={isActive ? "true" : undefined}
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70"
+        "flex w-full items-start gap-3 border-s-2 border-transparent px-3 py-3 text-left transition-colors hover:bg-muted/55",
+        isActive && "border-primary bg-primary-soft"
       )}
     >
       {/* Avatar */}

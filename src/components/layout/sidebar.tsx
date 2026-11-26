@@ -6,8 +6,6 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { EverloopMark } from "./everloop-mark";
 import { useAuth } from "@/hooks/use-auth";
-import { useTotalUnread } from "@/hooks/use-total-unread";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
   Bot,
@@ -15,6 +13,7 @@ import {
   GitBranch,
   LayoutDashboard,
   LogOut,
+  Smartphone,
   MessageSquare,
   Radio,
   Settings,
@@ -42,14 +41,14 @@ const ROLE_CHIP: Record<
     labelKey: "roleOwner",
     // Amber: scarce, immutable, "the boss" — gets visual emphasis.
     className:
-      "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      "border-status-warning/25 bg-status-warning/10 text-status-warning",
   },
   admin: {
     icon: Shield,
     labelKey: "roleAdmin",
     // Primary-tinted: significant but not as scarce as owner.
     className:
-      "border-primary/40 bg-primary/10 text-primary",
+      "border-primary/40 bg-primary-soft text-primary",
   },
   agent: {
     icon: UserCog,
@@ -110,16 +109,17 @@ interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
+  totalUnread: number;
+  unreadNotifications: number;
 }
 
 import { useTranslations } from "next-intl";
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, totalUnread, unreadNotifications }: SidebarProps) {
   const t = useTranslations("Sidebar");
+  const tMobile = useTranslations("Mobile");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
-  const totalUnread = useTotalUnread();
-  const unreadNotifications = useUnreadNotifications();
   const closeButton = useRef<HTMLButtonElement>(null);
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
@@ -171,7 +171,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           tabIndex={-1}
           aria-hidden="true"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-30 bg-foreground/25 lg:hidden"
         />
       )}
 
@@ -181,20 +181,20 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         aria-modal={open || undefined}
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r bg-sidebar",
           "transition-transform duration-200 ease-out motion-reduce:transition-none",
           open ? "translate-x-0" : "invisible -translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:visible lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:visible lg:static lg:z-0 lg:w-54 xl:w-59 lg:translate-x-0 lg:transition-none",
         )}
         aria-label={t("primaryNav")}
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
           <Link href="/dashboard" onClick={open ? onClose : undefined} className="flex items-center gap-2">
             <EverloopMark />
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-base font-bold tracking-tight text-foreground">
               {t("title")}
             </span>
           </Link>
@@ -203,7 +203,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             type="button"
             onClick={onClose}
             aria-label={t("closeMenu")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+            className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -218,7 +218,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
               const showUnreadDot =
-                item.href === "/inbox" && totalUnread > 0 && !isActive;
+                item.href === "/inbox" && totalUnread > 0;
 
               // Unlike the inbox dot, the notifications count stays visible
               // even while the page is active — it reflects unread state
@@ -235,9 +235,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     onClick={open ? onClose : undefined}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-9",
                       isActive
-                        ? "bg-primary/10 text-primary"
+                        ? "bg-primary-soft text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
@@ -246,7 +246,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     {item.beta && (
                       <span
                         aria-label={t("beta")}
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        className="rounded-full border border-status-warning/25 bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning"
                       >
                         {t("beta")}
                       </span>
@@ -254,10 +254,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     {showUnreadDot && (
                       <span
                         aria-label={t("unreadConversations", { count: totalUnread })}
-                        className="relative flex h-2 w-2"
+                        className="min-w-5 rounded-md bg-primary-soft-2 px-1 text-center text-[10px] leading-5 font-semibold text-primary"
                       >
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                        {totalUnread > 99 ? "99+" : totalUnread}
                       </span>
                     )}
                     {showNotificationBadge && (
@@ -286,9 +285,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     aria-current={isActive ? "page" : undefined}
                     onClick={open ? onClose : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-9",
                       isActive
-                        ? "bg-primary/10 text-primary"
+                        ? "bg-primary-soft text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
@@ -298,6 +297,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 </li>
               );
             })}
+            <li className="lg:hidden">
+              <Link href="/settings?tab=profile#everloop-mobile-app" onClick={onClose} className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                <Smartphone className="size-4" aria-hidden="true" />
+                {tMobile("installTitle")}
+              </Link>
+            </li>
           </ul>
         </nav>
 
@@ -328,7 +333,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   const Icon = meta.icon;
                   return (
                     <span
-                      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${meta.className}`}
+                      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.className}`}
                     >
                       <Icon className="size-3" />
                       {t(meta.labelKey as string)}

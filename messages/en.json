@@ -1,4 +1,18 @@
 {
+  "EditorLeave": {
+    "saveFailed": "Your changes could not be saved. You can keep editing and try again.",
+    "title": "Leave with unsaved changes?",
+    "description": "Save your edits before leaving, or discard them and continue.",
+    "stay": "Keep editing",
+    "discard": "Discard changes",
+    "save": "Save and leave",
+    "saving": "Saving…"
+  },
+  "AuthFrame": {
+    "description": "A shared workspace for WhatsApp conversations.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
+  },
   "LoginPage": {
     "titleAccept": "Sign in to accept",
     "titleWelcome": "Welcome back",
@@ -72,6 +86,8 @@
   },
   "Dashboard": {
     "activityFeed": {
+      "loadFailed": "Activity could not be loaded.",
+      "retry": "Try again",
       "title": "Recent Activity",
       "viewAll": "View all →",
       "noActivity": "No activity yet",
@@ -330,6 +346,8 @@
   },
   "Inbox": {
     "page": {
+      "conversationUnavailable": "This conversation could not be opened.",
+      "dismissUnavailable": "Back to Inbox",
       "mobileContactDetails": "Contact details",
       "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
     },
@@ -355,6 +373,9 @@
       "retryPage": "Retry"
     },
     "messageThread": {
+      "historyLoadFailed": "Messages could not be loaded.",
+      "threadActions": "Conversation actions",
+      "jumpToLatest": "Jump to latest",
       "backToConversations": "Back to conversations",
       "hideContactPanel": "Hide contact panel",
       "showContactPanel": "Show contact panel",
@@ -398,6 +419,7 @@
       "noCustomerMessages": "No customer messages"
     },
     "composer": {
+      "composeLabel": "Type a reply",
       "draftHint": "Tap the ✨ to draft a reply with AI — you can edit it before sending",
       "sessionExpiredHint": "Free-form replies are available for 24 hours after a customer message. Use an approved template to reach out.",
       "templates": "Templates",
@@ -476,6 +498,7 @@
       "you": "You"
     },
     "actions": {
+      "messageActions": "Message actions",
       "reply": "Reply",
       "copyText": "Copy text",
       "delete": "Delete",
@@ -564,6 +587,7 @@
       }
     },
     "page": {
+      "actionsFor": "Actions for {name}",
       "title": "Contacts",
       "subtitle": "Manage your contact list. {count} total contacts.",
       "subtitleZero": "Manage your contact list.",
@@ -647,6 +671,8 @@
       "notLinkedToAccount": "Your profile is not linked to an account."
     },
     "detailView": {
+      "loadFailed": "Contact could not be opened.",
+      "retry": "Try again",
       "tabs": {
         "details": "Details",
         "activity": "Activity",
@@ -1934,6 +1960,8 @@
       "ownerHint": "Full control over account and billing"
     },
     "whatsapp": {
+      "hideAccessToken": "Hide access token",
+      "showAccessToken": "Show access token",
       "title": "WhatsApp connection",
       "description": "Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here.",
       "tokenCorrupted": "Stored token can't be decrypted",
@@ -2429,6 +2457,7 @@
     "tabSetup": "Setup",
     "tabUsage": "Usage",
     "playground": {
+      "sendMessage": "Send message",
       "title": "Playground",
       "subtitle": "— test replies as if you were a customer",
       "reset": "Reset",
@@ -2491,6 +2520,7 @@
     "defaultListButton": "Menu"
   },
   "DashboardShell": {
+    "skipToContent": "Skip to content",
     "loading": "Loading..."
   },
   "UiPrimitives": {
@@ -3051,6 +3081,7 @@
     }
   },
   "Mobile": {
+    "installed": "Installed on this device",
     "home": "Home",
     "inbox": "Inbox",
     "contacts": "Contacts",

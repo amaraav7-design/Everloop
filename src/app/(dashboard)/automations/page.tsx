@@ -309,9 +309,8 @@ function AutomationCard({
               {automation.name}
             </span>
             {automation.is_active && (
-              <span className="relative flex h-2 w-2" aria-label={t("activeIndicator")}>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              <span className="shrink-0 rounded-md bg-status-good/10 px-1.5 py-0.5 text-[11px] font-medium text-status-good">
+                {t("activeIndicator")}
               </span>
             )}
           </div>

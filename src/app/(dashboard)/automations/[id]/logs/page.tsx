@@ -119,7 +119,7 @@ export default function AutomationLogsPage({
               >
                 <button
                   type="button"
-                  onClick={() => setOpenLogId(isOpen ? null : log.id)}
+                  aria-expanded={isOpen} onClick={() => setOpenLogId(isOpen ? null : log.id)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left"
                 >
                   {isOpen ? (
@@ -193,7 +193,7 @@ function StepRow({ result }: { result: AutomationLogStepResult }) {
       <span
         className={cn(
           "mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full",
-          ok ? "bg-primary/20 text-primary" : "bg-red-500/20 text-red-400",
+          ok ? "bg-primary/20 text-primary" : "bg-status-critical/10 text-status-critical",
         )}
         aria-hidden
       >
@@ -201,7 +201,7 @@ function StepRow({ result }: { result: AutomationLogStepResult }) {
       </span>
       <span className="text-muted-foreground">{result.step_type}</span>
       {result.detail && (
-        <span className="truncate text-muted-foreground">— {result.detail}</span>
+        <span className="min-w-0 break-words text-muted-foreground">{result.detail}</span>
       )}
     </li>
   )

@@ -774,8 +774,9 @@ export function WhatsAppConfig() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('phoneNumberId')}</Label>
+              <Label htmlFor="whatsapp-phoneNumberId" className="text-muted-foreground">{t('phoneNumberId')}</Label>
               <Input
+                id="whatsapp-phoneNumberId"
                 placeholder={t('phoneNumberIdPlaceholder')}
                 value={phoneNumberId}
                 onChange={(e) => setPhoneNumberId(e.target.value)}
@@ -784,8 +785,9 @@ export function WhatsAppConfig() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('wabaId')}</Label>
+              <Label htmlFor="whatsapp-wabaId" className="text-muted-foreground">{t('wabaId')}</Label>
               <Input
+                id="whatsapp-wabaId"
                 placeholder={t('wabaIdPlaceholder')}
                 value={wabaId}
                 onChange={(e) => setWabaId(e.target.value)}
@@ -794,10 +796,11 @@ export function WhatsAppConfig() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('accessToken')}</Label>
+              <Label htmlFor="whatsapp-accessToken" className="text-muted-foreground">{t('accessToken')}</Label>
               <div className="relative">
                 <Input
                   type={showToken ? 'text' : 'password'}
+                  id="whatsapp-accessToken"
                   placeholder={t('accessTokenPlaceholder')}
                   value={accessToken}
                   onChange={(e) => {
@@ -815,7 +818,9 @@ export function WhatsAppConfig() {
                 <button
                   type="button"
                   onClick={() => setShowToken(!showToken)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={t(showToken ? "hideAccessToken" : "showAccessToken")}
+                  aria-controls="whatsapp-accessToken"
+                  className="absolute inset-y-0 end-0 grid w-11 place-items-center rounded-e-lg text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -828,8 +833,9 @@ export function WhatsAppConfig() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('webhookVerifyToken')}</Label>
+              <Label htmlFor="whatsapp-webhookVerifyToken" className="text-muted-foreground">{t('webhookVerifyToken')}</Label>
               <Input
+                id="whatsapp-webhookVerifyToken"
                 placeholder={t('webhookVerifyTokenPlaceholder')}
                 value={verifyToken}
                 onChange={(e) => {

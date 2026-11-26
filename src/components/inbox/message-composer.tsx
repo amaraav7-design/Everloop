@@ -111,6 +111,7 @@ interface MediaDraft {
 
 interface MessageComposerProps {
   conversationId: string;
+  textDrafts: Map<string, string>;
   sessionExpired: boolean;
   onSend: (text: string, replyToId?: string) => void;
   onSendMedia: (payload: SendMediaPayload) => void;
@@ -133,6 +134,7 @@ const OPUS_ENCODER_PATH = "/opus/encoderWorker.min.js";
 
 export function MessageComposer({
   conversationId,
+  textDrafts,
   sessionExpired,
   onSend,
   onSendMedia,
@@ -144,7 +146,22 @@ export function MessageComposer({
   const t = useTranslations("Inbox.composer");
   const tGate = useTranslations("GatedButton");
 
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => textDrafts.get(conversationId) ?? "");
+  const updateText = useCallback((next: string) => {
+    setText(next);
+    if (!next) {
+      textDrafts.delete(conversationId);
+      return;
+    }
+    textDrafts.delete(conversationId);
+    textDrafts.set(conversationId, next);
+    if (textDrafts.size > 20) {
+      const oldest = textDrafts.keys().next().value;
+      if (oldest) textDrafts.delete(oldest);
+    }
+  }, [conversationId, textDrafts]);
+  const mounted = useRef(false);
+  const aiRequest = useRef<AbortController | null>(null);
   const [sending, setSending] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -218,7 +235,10 @@ export function MessageComposer({
   // navigation doesn't leak the mic, and GC a staged-but-unsent
   // attachment so it doesn't orphan in the bucket.
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
+      aiRequest.current?.abort();
       clearTimer();
       cancelledRef.current = true;
       // stop() releases the mic stream + audio context inside opus-recorder.
@@ -242,18 +262,18 @@ export function MessageComposer({
     setSending(true);
     try {
       onSend(trimmed, replyTo?.id);
-      setText("");
+      updateText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
+  }, [text, sending, sessionExpired, onSend, replyTo?.id, updateText]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey && enterSends) {
+      if (e.key === "Enter" && !e.shiftKey && enterSends && !e.nativeEvent.isComposing && e.keyCode !== 229) {
         e.preventDefault();
         handleSend();
       }
@@ -263,10 +283,10 @@ export function MessageComposer({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setText(e.target.value);
+      updateText(e.target.value);
       adjustHeight();
     },
-    [adjustHeight]
+    [adjustHeight, updateText]
   );
 
   // Ask the AI assistant for a suggested reply and drop it into the
@@ -274,14 +294,18 @@ export function MessageComposer({
   // nothing is sent until the agent hits Send.
   const handleDraft = useCallback(async () => {
     if (drafting) return;
+    const request = new AbortController();
+    aiRequest.current = request;
     setDrafting(true);
     try {
       const res = await fetch("/api/ai/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation_id: conversationId }),
+        signal: request.signal,
       });
       const data = await res.json().catch(() => ({}));
+      if (request.signal.aborted) return;
       if (!res.ok) {
         if (data.code === "ai_not_configured") {
           toast.error(t("aiNotConfigured"));
@@ -295,7 +319,7 @@ export function MessageComposer({
         toast.error(t("draftEmpty"));
         return;
       }
-      setText(draftText);
+      updateText(draftText);
       // Let the textarea grow to fit and drop the cursor at the end so
       // the agent can tweak immediately.
       requestAnimationFrame(() => {
@@ -307,11 +331,11 @@ export function MessageComposer({
         }
       });
     } catch {
-      toast.error(t("aiUnreachable"));
+      if (!request.signal.aborted) toast.error(t("aiUnreachable"));
     } finally {
-      setDrafting(false);
+      if (!request.signal.aborted) setDrafting(false);
     }
-  }, [drafting, conversationId, adjustHeight, t]);
+  }, [drafting, conversationId, adjustHeight, t, updateText]);
 
   // ---- Interactive message + quick replies --------------------------
 
@@ -382,9 +406,7 @@ export function MessageComposer({
       const body = qr.content_text ?? "";
       // Separate the snippet from any existing draft with a newline so the
       // words don't run together ("Thanks" + "we'll…" → "Thankswe'll…").
-      setText((prev) =>
-        prev && !/\s$/.test(prev) ? `${prev}\n${body}` : `${prev}${body}`,
-      );
+      updateText(text && !/\s$/.test(text) ? `${text}\n${body}` : `${text}${body}`);
       requestAnimationFrame(() => {
         adjustHeight();
         const el = textareaRef.current;
@@ -394,7 +416,7 @@ export function MessageComposer({
         }
       });
     },
-    [openInteractiveBuilder, adjustHeight],
+    [openInteractiveBuilder, adjustHeight, text, updateText],
   );
 
   // Upload a captured file to chat-media and stage it as a draft.
@@ -417,9 +439,15 @@ export function MessageComposer({
       setBusy(true);
       try {
         const { publicUrl, path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
+        if (!mounted.current) {
+          removeStaged(path);
+          return;
+        }
         // Replacing an existing draft? GC the previous object first.
         removeStaged(draftRef.current?.path);
-        setDraft({ kind, mediaUrl: publicUrl, path, filename: file.name, caption: "" });
+        const next = { kind, mediaUrl: publicUrl, path, filename: file.name, caption: "" };
+        draftRef.current = next;
+        setDraft(next);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t("uploadFailed"));
       } finally {
@@ -455,8 +483,14 @@ export function MessageComposer({
       setBusy(true);
       try {
         const { publicUrl, path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
+        if (!mounted.current) {
+          removeStaged(path);
+          return;
+        }
         removeStaged(draftRef.current?.path);
-        setDraft({ kind: "audio", mediaUrl: publicUrl, path, filename: file.name, caption: "" });
+        const next: MediaDraft = { kind: "audio", mediaUrl: publicUrl, path, filename: file.name, caption: "" };
+        draftRef.current = next;
+        setDraft(next);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t("uploadFailed"));
       } finally {
@@ -482,6 +516,7 @@ export function MessageComposer({
       // Lazy-load the encoder (≈400 KB worker) only when the user records,
       // keeping it out of the main bundle.
       const { default: Recorder } = await import("opus-recorder");
+      if (!mounted.current) return;
       const recorder = new Recorder({
         encoderPath: OPUS_ENCODER_PATH,
         numberOfChannels: 1,
@@ -496,6 +531,10 @@ export function MessageComposer({
       };
       recorderRef.current = recorder;
       await recorder.start();
+      if (!mounted.current) {
+        void recorder.stop().catch(() => {});
+        return;
+      }
       setRecording(true);
       setRecordSeconds(0);
       let elapsedSeconds = 0;
@@ -534,6 +573,7 @@ export function MessageComposer({
       replyToId: replyTo?.id,
     });
     // The object is now owned by the sent message — clear without GC.
+    draftRef.current = null;
     setDraft(null);
     onClearReply?.();
   }, [draft, busy, inputsDisabled, onSendMedia, replyTo?.id, onClearReply]);
@@ -541,6 +581,7 @@ export function MessageComposer({
   // Discard GCs the staged object — it was uploaded but never sent.
   const discardDraft = useCallback(() => {
     removeStaged(draft?.path);
+    draftRef.current = null;
     setDraft(null);
   }, [draft?.path, removeStaged]);
 
@@ -632,7 +673,7 @@ export function MessageComposer({
           <button
             type="button"
             onClick={cancelRecording}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-card hover:text-foreground"
+            className="min-h-11 px-2 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
             {t("cancel")}
           </button>
@@ -757,6 +798,7 @@ export function MessageComposer({
 
           <textarea
             ref={textareaRef}
+            aria-label={t("composeLabel")}
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
@@ -765,7 +807,7 @@ export function MessageComposer({
                 ? t("readOnlyPlaceholder")
                 : sessionExpired
                   ? t("sessionExpiredPlaceholder")
-                  : t("typeMessagePlaceholder")
+                  : t("composeLabel")
             }
             disabled={sessionExpired || readOnly}
             rows={1}
@@ -792,15 +834,6 @@ export function MessageComposer({
             <Send className="h-4 w-4" />
           </GatedButton>
         </div>
-      )}
-
-      {/* Hint sits outside the flex row so its height doesn't push
-          `items-end` buttons below the textarea. Indented to line up
-          under the textarea left edge. */}
-      {!draft && !recording && !inputsDisabled && (
-        <p className="mt-1 pl-1 text-[10px] text-muted-foreground sm:pl-[5.5rem]">
-          {t("draftHint")}
-        </p>
       )}
 
       {/* Interactive-message builder dialog. */}

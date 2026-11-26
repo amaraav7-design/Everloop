@@ -311,7 +311,7 @@ export function ProfileForm() {
 
           {/* Read-only block */}
           <div className="rounded-lg border border-border bg-muted p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-3 text-xs font-semibold text-muted-foreground">
               {t('accountDetails')}
             </p>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">

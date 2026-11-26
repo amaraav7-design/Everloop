@@ -192,7 +192,7 @@ export function ContactSidebar({ contact, fullWidth }: ContactSidebarProps) {
 
           {/* Tags */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
               <TagIcon className="h-3 w-3" />
               {tSidebar("tags")}
             </div>
@@ -221,7 +221,7 @@ export function ContactSidebar({ contact, fullWidth }: ContactSidebarProps) {
 
           {/* Active Deals */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
               <DollarSign className="h-3 w-3" />
               {tSidebar("deals")}
             </div>
@@ -265,7 +265,7 @@ export function ContactSidebar({ contact, fullWidth }: ContactSidebarProps) {
 
           {/* Notes */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
               <StickyNote className="h-3 w-3" />
               {tSidebar("notes")}
             </div>

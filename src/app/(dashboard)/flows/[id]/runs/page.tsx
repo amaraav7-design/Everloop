@@ -237,7 +237,7 @@ function RunCard({
     <div className="rounded-lg border border-border bg-card">
       <button
         type="button"
-        onClick={onToggle}
+        aria-expanded={expanded} onClick={onToggle}
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
         {expanded ? (

@@ -20,14 +20,13 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/auth/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { CheckCircle, KeyRound, Loader2, MailX } from "lucide-react";
 
@@ -82,7 +81,7 @@ export default function ResetPasswordPage() {
 
   if (status === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="flex w-full items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           {t("checking")}
@@ -93,33 +92,29 @@ export default function ResetPasswordPage() {
 
   if (status === "expired") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border bg-card">
+      <div className="flex w-full items-center justify-center">
+        <Card className="w-full max-w-md border-border bg-card sm:px-2">
           <CardHeader className="items-center text-center">
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
               <MailX className="h-6 w-6 text-amber-400" />
             </div>
-            <CardTitle className="text-xl text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {t("expiredTitle")}
-            </CardTitle>
+            </h1>
             <CardDescription className="text-muted-foreground">
               {t("expiredDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <Link href="/forgot-password">
-              <Button className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button render={<Link href="/forgot-password" />} nativeButton={false} className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary-hover">
                 {t("requestNewLink")}
               </Button>
-            </Link>
-            <Link href="/login">
-              <Button
+            <Button render={<Link href="/login" />} nativeButton={false}
                 variant="outline"
                 className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {t("backToSignIn")}
               </Button>
-            </Link>
           </CardContent>
         </Card>
       </div>
@@ -128,22 +123,22 @@ export default function ResetPasswordPage() {
 
   if (status === "done") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border bg-card">
+      <div className="flex w-full items-center justify-center">
+        <Card className="w-full max-w-md border-border bg-card sm:px-2">
           <CardHeader className="items-center text-center">
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
               <CheckCircle className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle className="text-xl text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {t("successTitle")}
-            </CardTitle>
+            </h1>
             <CardDescription className="text-muted-foreground">
               {t("successDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button
-              className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className="min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary-hover"
               onClick={() => {
                 // Full-page navigation, like /login: the middleware
                 // gating /dashboard must see the session cookies on a
@@ -162,13 +157,13 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
+    <div className="flex w-full items-center justify-center">
+      <Card className="w-full max-w-md border-border bg-card sm:px-2">
         <CardHeader className="items-center text-center">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             <KeyRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl text-foreground">{t("title")}</CardTitle>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("title")}</h1>
           <CardDescription className="text-muted-foreground">
             {t("desc")}
           </CardDescription>
@@ -176,7 +171,7 @@ export default function ResetPasswordPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div role="alert" className="rounded-lg border border-status-critical/25 bg-status-critical/10 px-4 py-3 text-sm text-status-critical">
                 {error}
               </div>
             )}
@@ -185,9 +180,8 @@ export default function ResetPasswordPage() {
               <Label htmlFor="password" className="text-muted-foreground">
                 {t("passwordLabel")}
               </Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 placeholder={t("passwordPlaceholder")}
                 value={password}
@@ -201,9 +195,8 @@ export default function ResetPasswordPage() {
               <Label htmlFor="confirmPassword" className="text-muted-foreground">
                 {t("confirmPasswordLabel")}
               </Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 autoComplete="new-password"
                 placeholder={t("confirmPasswordPlaceholder")}
                 value={confirmPassword}
@@ -216,7 +209,7 @@ export default function ResetPasswordPage() {
             <Button
               type="submit"
               disabled={saving}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-2 min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {saving ? t("saving") : t("submit")}
             </Button>

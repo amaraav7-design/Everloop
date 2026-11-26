@@ -56,7 +56,7 @@ import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 const PAGE_SIZE = 25;
 
@@ -65,6 +65,7 @@ interface ContactWithTags extends Contact {
 }
 
 export default function ContactsPage() {
+  const locale = useLocale();
   const t = useTranslations('Contacts.page');
   const tGate = useTranslations('GatedButton');
   const supabase = createClient();
@@ -350,12 +351,12 @@ export default function ContactsPage() {
             {totalCount > 0 ? t('subtitle', { count: totalCount }) : t('subtitleZero')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canEditSettings && (
             <Button
               variant="outline"
               onClick={() => setCustomFieldsOpen(true)}
-              className="border-border text-muted-foreground hover:bg-muted"
+              className="min-h-11 border-border text-muted-foreground hover:bg-muted sm:min-h-9"
             >
               <SlidersHorizontal className="size-4" />
               {t('customFieldsBtn')}
@@ -366,7 +367,7 @@ export default function ContactsPage() {
             canAct={canEdit}
             gateReason={tGate('reasons.addOrImportContacts')}
             onClick={() => setImportOpen(true)}
-            className="border-border text-muted-foreground hover:bg-muted"
+            className="min-h-11 border-border text-muted-foreground hover:bg-muted sm:min-h-9"
           >
             <Upload className="size-4" />
             {t('importBtn')}
@@ -375,7 +376,7 @@ export default function ContactsPage() {
             canAct={canEdit}
             gateReason={tGate('reasons.addOrImportContacts')}
             onClick={openAddForm}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="-order-1 min-h-11 bg-primary text-primary-foreground hover:bg-primary-hover sm:order-0 sm:min-h-9"
           >
             <Plus className="size-4" />
             {t('addContactBtn')}
@@ -529,7 +530,7 @@ export default function ContactsPage() {
       )}
 
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="overflow-hidden rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
@@ -543,7 +544,7 @@ export default function ContactsPage() {
                 />
               </TableHead>
               <TableHead className="text-muted-foreground">{t('tableColumns.name')}</TableHead>
-              <TableHead className="text-muted-foreground">{t('tableColumns.phone')}</TableHead>
+              <TableHead className="hidden text-muted-foreground sm:table-cell">{t('tableColumns.phone')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.email')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.tags')}</TableHead>
@@ -601,10 +602,14 @@ export default function ContactsPage() {
                       aria-label={t('selectContact', { name: contact.name || contact.phone })}
                     />
                   </TableCell>
-                  <TableCell className="text-foreground font-medium">
-                    {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                  <TableCell className="min-w-0 whitespace-normal text-foreground">
+                    <button type="button" onClick={(event) => { event.stopPropagation(); openDetail(contact.id); }} className="block min-h-11 w-full max-w-full rounded text-left hover:underline sm:min-h-8">
+                      <span className="block break-words text-sm font-semibold">{contact.name || t('unnamed')}</span>
+                      <span className="block break-all text-xs text-muted-foreground sm:hidden">{contact.phone}</span>
+                      {contact.tags?.[0] && <span className="mt-1 inline-flex rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground md:hidden">{contact.tags[0].name}</span>}
+                    </button>
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">
+                  <TableCell className="hidden text-muted-foreground tabular-nums text-xs sm:table-cell">
                     {contact.phone}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
@@ -639,7 +644,7 @@ export default function ContactsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs hidden lg:table-cell">
-                    {new Date(contact.created_at).toLocaleDateString('en-US', {
+                    {new Date(contact.created_at).toLocaleDateString(locale, {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
@@ -652,7 +657,8 @@ export default function ContactsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={t("actionsFor", { name: contact.name || contact.phone })}
+                            className="size-11 text-muted-foreground hover:text-foreground sm:size-8"
                             onClick={(e) => e.stopPropagation()}
                           />
                         }
@@ -748,6 +754,7 @@ export default function ContactsPage() {
 
       {/* Contact Detail Sheet */}
       <ContactDetailView
+        key={detailContactId ?? "closed"}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         contactId={detailContactId}

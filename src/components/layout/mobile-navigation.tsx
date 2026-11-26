@@ -14,22 +14,31 @@ const destinations = [
   { href: '/broadcasts', label: 'campaigns', icon: Radio },
 ] as const;
 
-const tab = 'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
+const tab = 'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
 
-export function MobileNavigation({ open, moreButton, onMore }: {
+export function MobileNavigation({ open, moreButton, onMore, totalUnread }: {
   open: boolean;
   moreButton: Ref<HTMLButtonElement>;
   onMore: () => void;
+  totalUnread: number;
 }) {
   const pathname = usePathname();
   const t = useTranslations('Mobile');
+  const tSidebar = useTranslations('Sidebar');
+  const moreCurrent = !destinations.some(({ href }) => pathname === href || pathname.startsWith(href + '/')) && pathname !== '/notifications';
   return (
-    <nav aria-label={t('navigation')} className="everloop-mobile-nav grid shrink-0 grid-cols-5 border-t border-border bg-background lg:hidden">
+    <nav aria-label={t('navigation')} className="everloop-mobile-nav grid shrink-0 grid-cols-5 gap-0.5 border-t bg-card px-1 pt-1 lg:hidden">
       {destinations.map(({ href, label, icon: Icon }) => {
         const current = pathname === href || pathname.startsWith(href + '/');
+        const unread = label === 'inbox' && totalUnread > 0;
         return (
-          <Link key={href} href={href} aria-current={current ? 'page' : undefined} className={cn(tab, current && 'bg-primary/10 font-semibold text-primary')}>
-            <Icon className="size-5" aria-hidden="true" />
+          <Link key={href} href={href} aria-current={current ? 'page' : undefined}
+            aria-label={unread ? `${t(label)}, ${tSidebar('unreadConversations', { count: totalUnread })}` : undefined}
+            className={cn(tab, current && 'bg-primary-soft font-semibold text-primary')}>
+            <span className="relative">
+              <Icon className="size-5" aria-hidden="true" />
+              {unread && <span aria-hidden="true" className="absolute -end-2 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">{totalUnread > 9 ? '9+' : totalUnread}</span>}
+            </span>
             <span className="max-w-full truncate">{t(label)}</span>
           </Link>
         );
@@ -37,7 +46,7 @@ export function MobileNavigation({ open, moreButton, onMore }: {
       <button
         ref={moreButton}
         type="button"
-        className={cn(tab, open && 'bg-primary/10 text-primary')}
+        className={cn(tab, (open || moreCurrent) && 'bg-primary-soft text-primary')}
         aria-expanded={open}
         aria-controls="everloop-primary-drawer"
         aria-haspopup="dialog"

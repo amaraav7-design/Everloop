@@ -234,7 +234,7 @@ export default function NotificationsPage() {
                     <div className="flex items-center gap-2">
                       <span
                         className={cn(
-                          "truncate text-sm font-semibold",
+                          "break-words text-sm font-semibold",
                           isUnread ? "text-foreground" : "text-muted-foreground",
                         )}
                       >
@@ -243,16 +243,16 @@ export default function NotificationsPage() {
                       {isUnread && (
                         <span
                           aria-label={t("unread")}
-                          className="h-2 w-2 flex-shrink-0 rounded-full bg-primary"
-                        />
+                          className="shrink-0 rounded bg-primary-soft-2 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                        >{t("unread")}</span>
                       )}
                     </div>
                     {n.body && (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      <p className="mt-0.5 break-words text-sm text-muted-foreground">
                         {n.body}
                       </p>
                     )}
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(n.created_at), {
                         addSuffix: true,
                       })}

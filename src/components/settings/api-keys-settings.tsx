@@ -211,12 +211,12 @@ export function ApiKeysSettings() {
                           {k.name}
                         </span>
                         {status === 'revoked' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
+                          <Badge className="border-border bg-muted text-muted-foreground text-[10px]">
                             {t('revoked')}
                           </Badge>
                         )}
                         {status === 'expired' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
+                          <Badge className="border-border bg-muted text-muted-foreground text-[10px]">
                             {t('expired')}
                           </Badge>
                         )}

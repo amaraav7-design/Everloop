@@ -105,7 +105,7 @@ export interface FlowEditorContextValue {
   removeNode: (key: string) => void;
 
   // Actions
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   setStatus: (status: BuilderState["status"]) => Promise<void>;
   deleteFlow: () => Promise<void>;
 
@@ -295,23 +295,6 @@ export function FlowEditorProvider({
     [],
   );
 
-  // Browser-level reload / tab-close / external-link guard. SPA
-  // navigation (sidebar links, back button) isn't covered — Next 16
-  // routes through the App Router and beforeunload doesn't fire on
-  // client-side route changes. That's a follow-up; this catches the
-  // accidental refresh / closed-window class of data loss.
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Modern browsers ignore the return value but require something
-      // truthy to actually show the native prompt.
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
-
   // ---- Validation ----
   const issues = useMemo<ValidationIssue[]>(
     () =>
@@ -353,9 +336,11 @@ export function FlowEditorProvider({
       }
       setDirty(false);
       toast.success(t("saved"));
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("saveFailed");
       toast.error(msg);
+      return false;
     } finally {
       setSaving(false);
     }

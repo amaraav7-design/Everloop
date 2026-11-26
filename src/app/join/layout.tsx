@@ -1,3 +1,4 @@
+import { AuthFrame } from "@/components/auth/auth-frame";
 // ============================================================
 // /join/[token] layout — minimal full-bleed dark shell.
 //
@@ -36,9 +37,5 @@ export const metadata: Metadata = {
 };
 
 export default function JoinLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      {children}
-    </div>
-  );
+  return <AuthFrame>{children}</AuthFrame>;
 }

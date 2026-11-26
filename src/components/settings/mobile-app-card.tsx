@@ -1,14 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
-import { Download, Smartphone } from 'lucide-react';
+import { Check, Download, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import { setInstallPrompt, useInstallPrompt } from "@/components/pwa/install-prompt";
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { revokePushOnThisDevice } from '@/lib/notifications/push-device';
+
+const displayMode = "(display-mode: standalone)";
+
+function subscribeInstalled(onChange: () => void) {
+  const query = window.matchMedia(displayMode);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function installedOnDevice() {
+  return window.matchMedia(displayMode).matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
 
 export function MobileAppCard() {
   const t = useTranslations('Mobile');
@@ -18,6 +31,7 @@ export function MobileAppCard() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const prompt = useInstallPrompt();
+  const installed = useSyncExternalStore(subscribeInstalled, installedOnDevice, () => false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || accountRole === 'viewer') return;
@@ -97,16 +111,22 @@ export function MobileAppCard() {
   }
 
   return (
-    <Card className="mt-6">
+    <Card id="everloop-mobile-app" className="mt-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Smartphone className="size-4" aria-hidden="true" /> {t('installTitle')}</CardTitle>
         <CardDescription>{t('installDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button variant="outline" className="min-h-11" onClick={install} aria-expanded={!prompt ? showInstallHelp : undefined}>
-          <Download className="size-4" aria-hidden="true" /> {t(prompt ? 'installAction' : 'installHelpAction')}
-        </Button>
-        {showInstallHelp && <p className="text-sm text-muted-foreground">{t('installHelp')}</p>}
+        {installed ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-status-good"><Check className="size-4" aria-hidden="true" />{t('installed')}</p>
+        ) : (
+          <>
+            <Button variant="outline" className="min-h-11" onClick={install} aria-expanded={!prompt ? showInstallHelp : undefined}>
+              <Download className="size-4" aria-hidden="true" /> {t(prompt ? 'installAction' : 'installHelpAction')}
+            </Button>
+            {showInstallHelp && <p className="text-sm text-muted-foreground">{t('installHelp')}</p>}
+          </>
+        )}
         {pushKey && accountRole !== 'viewer' && (
           <div className="space-y-2 border-t border-border pt-4">
             <p className="text-sm text-muted-foreground">{t('pushDescription')}</p>

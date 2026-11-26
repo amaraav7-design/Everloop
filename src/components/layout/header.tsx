@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Settings as SettingsIcon, User } from "lucide-react";
+import { Bell, LogOut, Settings as SettingsIcon, User } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -40,12 +40,13 @@ function getPageTitleKey(pathname: string) {
 
 import { useTranslations } from "next-intl";
 
-export function Header() {
+export function Header({ unreadNotifications }: { unreadNotifications: number }) {
   const t = useTranslations("Header");
   const tPage = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
   const titleKey = getPageTitleKey(pathname);
+  const notificationRoute = titleKey === "notifications";
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -53,19 +54,28 @@ export function Header() {
     "U";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-6">
+    <header className="everloop-header flex h-15 shrink-0 items-center justify-between gap-3 border-b bg-card px-4 lg:h-14 lg:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+        <span className="truncate text-sm font-semibold text-foreground">
           {tPage(titleKey)}
-        </h1>
+        </span>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <Link
+          href="/notifications"
+          aria-current={notificationRoute ? "page" : undefined}
+          aria-label={unreadNotifications ? tPage("unreadNotifications", { count: unreadNotifications }) : tPage("notifications")}
+          className="relative flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-primary-soft aria-[current=page]:text-primary lg:hidden"
+        >
+          <Bell className="size-4.5" aria-hidden="true" />
+          {unreadNotifications > 0 && <span aria-hidden="true" className="absolute end-1 top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-semibold text-primary-foreground">{unreadNotifications > 9 ? "9+" : unreadNotifications}</span>}
+        </Link>
         <ModeToggle />
 
         <DropdownMenu>
         <DropdownMenuTrigger
-          className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted/70 focus:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-3 sm:pl-1 sm:pr-3"
+          className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-muted/70 focus:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-3 sm:pl-1 sm:pr-3"
           aria-label={t("openAccountMenu")}
         >
           <Avatar className="size-8">

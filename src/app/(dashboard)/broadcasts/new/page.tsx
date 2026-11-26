@@ -143,7 +143,7 @@ function CampaignWizard() {
   if (loadingDraft) return <p role="status" className="text-sm text-muted-foreground">{t('loadingDraft')}</p>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-5 sm:space-y-7">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
@@ -153,17 +153,17 @@ function CampaignWizard() {
       </div>
 
       {/* Step Indicator */}
-      <ol className="flex items-center justify-between">
+      <ol className="flex items-start rounded-xl border bg-card p-3 sm:px-5">
         {steps.map((step, index) => {
           const isActive = index === currentStep;
           const isCompleted = index < currentStep;
 
           return (
-            <li key={step} aria-current={isActive ? 'step' : undefined} className="flex flex-1 items-center">
-              <div className="flex items-center gap-2">
+            <li key={step} aria-current={isActive ? 'step' : undefined} className="flex min-w-0 flex-1 items-start justify-center">
+              <div className="flex min-w-0 flex-col items-center gap-1.5 text-center sm:flex-row sm:gap-2 sm:text-left">
                 <div
                   aria-hidden="true"
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-all ${
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                     isCompleted
                       ? 'bg-primary text-primary-foreground'
                       : isActive
@@ -174,7 +174,7 @@ function CampaignWizard() {
                   {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
                 </div>
                 <span
-                  className={`sr-only text-sm font-medium sm:not-sr-only ${
+                  className={`break-words text-[11px] font-medium leading-tight sm:text-sm ${
                     isActive ? 'text-foreground' : isCompleted ? 'text-primary' : 'text-muted-foreground'
                   }`}
                 >
@@ -184,7 +184,7 @@ function CampaignWizard() {
               {index < steps.length - 1 && (
                 <div
                   aria-hidden="true"
-                  className={`mx-3 h-px flex-1 ${
+                  className={`mx-2 mt-4 hidden h-px flex-1 lg:block ${
                     index < currentStep ? 'bg-primary' : 'bg-muted'
                   }`}
                 />
@@ -200,10 +200,10 @@ function CampaignWizard() {
         role="group"
         aria-label={t(`steps.${steps[currentStep]}`)}
         tabIndex={-1}
-        className="relative min-h-[400px] outline-none"
+        className="relative outline-none"
       >
         <div
-          className="transition-all duration-300 ease-in-out"
+          className="transition-opacity duration-(--feedback)"
           style={{
             opacity: isProcessing ? 0.6 : 1,
             pointerEvents: isProcessing ? 'none' : 'auto',

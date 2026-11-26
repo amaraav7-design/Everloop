@@ -24,12 +24,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, ChevronRight, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
 import { GatedButton } from "@/components/ui/gated-button";
 import { useTranslations } from "next-intl";
+import { formatCurrency } from "@/lib/currency";
 
 // Pipeline creation is admin-class (settings-tier write under
 // the new RLS); deal creation is operational and only requires
@@ -50,6 +51,8 @@ const SPEC_DEFAULT_STAGES = [
 export default function PipelinesPage() {
   const t = useTranslations("Pipelines.page");
   const tGate = useTranslations("GatedButton");
+  const tNav = useTranslations("Sidebar");
+  const tCards = useTranslations("Pipelines.card");
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
@@ -317,13 +320,14 @@ export default function PipelinesPage() {
 
   return (
     <div className="space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight">{tNav("pipelines")}</h1>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {/* Pipeline selector dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors data-[popup-open]:bg-muted"
+              className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors data-[popup-open]:bg-muted"
             >
               <GitBranch className="h-4 w-4 text-primary" />
               <span className="font-semibold">
@@ -414,23 +418,47 @@ export default function PipelinesPage() {
         </div>
       ) : (
         <>
+          <div className="space-y-5 lg:hidden">
+            {stages.map(stage => {
+              const stageDeals = deals.filter(deal => deal.stage_id === stage.id);
+              return (
+                <section key={stage.id} className="overflow-hidden rounded-xl border bg-card">
+                  <h2 className="flex items-center justify-between gap-3 border-b bg-card-2 px-4 py-3 text-sm font-semibold">
+                    {stage.name}
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground">{stageDeals.length}</span>
+                  </h2>
+                  <ul className="divide-y">
+                    {stageDeals.map(deal => (
+                      <li key={deal.id} className="grid min-w-0 gap-2 px-3 py-2 min-[520px]:grid-cols-[1fr_10rem]">
+                        <button
+                          type="button"
+                          onClick={() => handleEditDeal(deal)}
+                          className="flex min-h-11 min-w-0 items-center gap-3 rounded-md px-1 text-left transition-colors hover:bg-muted/65"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words text-sm font-semibold">{deal.title}</span>
+                            <span className="block break-words text-xs text-muted-foreground">{deal.contact?.name || deal.contact?.phone || tCards("noContact")}</span>
+                          </span>
+                          <span className="shrink-0 text-sm tabular-nums text-primary">{formatCurrency(deal.value, deal.currency)}</span>
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                        <select
+                          value={deal.stage_id}
+                          aria-label={t("mobileStage", { deal: deal.title })}
+                          disabled={!canCreateDeals}
+                          className="min-h-11 w-full rounded-lg border border-input bg-background px-2.5 text-base"
+                          onChange={event => void handleDealMoved(deal.id, event.target.value)}
+                        >
+                          {stages.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
           <PipelineAnalytics stages={stages} deals={deals} />
-          <ul className="grid gap-2 lg:hidden">
-            {deals.map(deal => (
-              <li key={deal.id} className="grid gap-2 rounded-lg border border-border bg-card p-3">
-                <span className="break-words text-sm font-medium">{deal.title}</span>
-                <select
-                  value={deal.stage_id}
-                  aria-label={t("mobileStage", { deal: deal.title })}
-                  disabled={!canCreateDeals}
-                  className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-base"
-                  onChange={event => void handleDealMoved(deal.id, event.target.value)}
-                >
-                  {stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
-                </select>
-              </li>
-            ))}
-          </ul>
           <div className="hidden lg:block">
           <PipelineBoard
             stages={stages}

@@ -1,3 +1,4 @@
+import { AuthFrame } from "@/components/auth/auth-frame";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -20,5 +21,5 @@ export const metadata: Metadata = {
 };
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <AuthFrame>{children}</AuthFrame>;
 }

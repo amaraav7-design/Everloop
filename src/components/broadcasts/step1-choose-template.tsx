@@ -1,11 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useCan } from '@/hooks/use-can';
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -22,11 +24,16 @@ interface Step1Props {
 
 export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack }: Step1Props) {
   const t = useTranslations('Broadcasts.wizard');
+  const tList = useTranslations('Broadcasts.page');
+  const tSettings = useTranslations('Settings');
+  const canManageTemplates = useCan('edit-settings');
+  const [attempt, setAttempt] = useState(0);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let current = true;
     async function fetchTemplates() {
       try {
         const supabase = createClient();
@@ -40,16 +47,17 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
           .order('created_at', { ascending: false });
 
         if (fetchError) throw fetchError;
-        setTemplates(data ?? []);
+        if (current) setTemplates(data ?? []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('chooseTemplate.errorLoad'));
+        if (current) setError(err instanceof Error ? err.message : t('chooseTemplate.errorLoad'));
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     }
 
-    fetchTemplates();
-  }, [t]);
+    void fetchTemplates();
+    return () => { current = false; };
+  }, [attempt, t]);
 
   if (loading) {
     return (
@@ -61,8 +69,12 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2">
-        <p className="text-sm text-red-400">{error}</p>
+      <div className="space-y-4 rounded-xl border bg-card p-4 sm:p-6">
+        <p role="alert" className="text-sm text-status-critical">{error}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onBack}>{t('back')}</Button>
+          <Button onClick={() => { setError(null); setLoading(true); setAttempt(value => value + 1); }}>{tList('retry')}</Button>
+        </div>
       </div>
     );
   }
@@ -81,6 +93,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
           <FileText className="mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">{t('chooseTemplate.noTemplates')}</p>
           <p className="mt-1 text-xs text-muted-foreground">{t('chooseTemplate.createFirst')}</p>
+          {canManageTemplates && <Link href="/settings?tab=templates" className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-primary-soft px-3 text-sm font-semibold text-primary">{tSettings('sections.templates')}</Link>}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -91,10 +104,12 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
             return (
               <button
                 key={template.id}
+                type="button"
+                aria-pressed={isSelected}
                 onClick={() => onSelect(template)}
-                className={`flex flex-col gap-3 rounded-xl border p-4 text-left transition-all ${
+                className={`flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors ${
                   isSelected
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                    ? 'border-primary bg-primary-soft ring-1 ring-primary/30'
                     : 'border-border bg-card/50 hover:border-border hover:bg-card'
                 }`}
               >

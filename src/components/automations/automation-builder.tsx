@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { EditorLeaveDialog, useEditorLeave } from "@/components/ui/editor-leave-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -657,8 +658,11 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   const t = useTranslations("Automations.builder")
   const isEditing = !!initial.id
   const [state, setState] = useState<BuilderInitial>(initial)
+  const [savedState, setSavedState] = useState(initial)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const exit = useEditorLeave(state !== savedState || saving)
 
   function patchTop<K extends keyof BuilderInitial>(key: K, value: BuilderInitial[K]) {
     setState((s) => ({ ...s, [key]: value }))
@@ -690,8 +694,9 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
     setState((s) => ({ ...s, steps: moveAt(s.steps, path, direction) }))
   }
 
-  async function save() {
+  async function save(openEditor = true) {
     setSaving(true)
+    setSaveError(null)
     try {
       const payload = {
         name: state.name || t("untitled"),
@@ -716,39 +721,35 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        // If the server blocked activation with validation issues,
-        // surface the first concrete problem so the user can fix it
-        // without opening DevTools for the full array.
-        const firstIssue: { path?: string; message?: string } | undefined =
-          body?.issues?.[0]
-        if (firstIssue?.message) {
-          toast.error(firstIssue.message, {
-            description: firstIssue.path ? t("toasts.issueAt", { path: firstIssue.path }) : undefined,
-          })
-        } else {
-          toast.error(body?.error ?? t("toasts.saveFailed"))
-        }
-        return
+        const firstIssue = body?.issues?.[0]
+        setSaveError(firstIssue?.message ?? body?.error ?? t("toasts.saveFailed"))
+        return false
       }
+      setSavedState(state)
       toast.success(isEditing ? t("toasts.saved") : t("toasts.created"))
-      if (!isEditing && body?.automation?.id) {
+      if (openEditor && !isEditing && body?.automation?.id) {
         router.replace(`/automations/${body.automation.id}/edit`)
       }
+      return true
+    } catch {
+      setSaveError(t("toasts.saveFailed"))
+      return false
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background">
+    <div className="fixed inset-0 z-20 flex flex-col bg-background [padding-top:env(safe-area-inset-top)]">
+      <EditorLeaveDialog open={exit.pending} onStay={exit.dismiss} onLeave={exit.leave} onSave={() => save(false)} saving={saving} />
       {/* Top bar. At sub-sm widths the "Active" label is hidden and the
           switch moves to the right of the save button, so the name input
           gets maximum width. */}
       <header className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-card/80 px-3 py-3 sm:gap-3 sm:px-4">
         <button
           type="button"
-          onClick={() => router.push("/automations")}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => exit.navigate("/automations")}
+          className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={t("backToAutomations")}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -757,6 +758,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           value={state.name}
           onChange={(e) => patchTop("name", e.target.value)}
           placeholder={t("untitled")}
+          aria-label={t("untitled")}
           className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:bg-muted focus:outline-none sm:text-base"
         />
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -768,7 +770,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           />
         </div>
         <Button
-          onClick={save}
+          onClick={() => void save()}
           disabled={saving}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
@@ -776,6 +778,8 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           {isEditing ? t("save") : t("saveDraft")}
         </Button>
       </header>
+
+      {saveError && <p role="alert" className="border-b border-status-critical/25 bg-status-critical/10 px-4 py-3 text-sm text-status-critical">{saveError}</p>}
 
       {/* Canvas */}
       <div className="relative flex-1 overflow-y-auto">
@@ -839,7 +843,7 @@ function TriggerCard({
             <Zap className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wide text-blue-300">{t("trigger")}</div>
+            <div className="text-[11px] text-blue-300">{t("trigger")}</div>
             <div className="truncate text-sm font-medium text-foreground">
               {t(`triggers.${type}.label`)}
             </div>
@@ -1153,7 +1157,7 @@ function StepRenderer({
               <Icon className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 {isCondition ? t("kindCondition") : step.step_type === "wait" ? t("kindWait") : t("kindAction")}
               </div>
               <div className="truncate text-sm font-medium text-foreground">{t(`steps.${meta.label}`)}</div>
@@ -1269,7 +1273,7 @@ function BranchColumn({
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center">
-      <div className={cn("mb-2 text-[11px] font-semibold uppercase", color)}>{label}</div>
+      <div className={cn("mb-2 text-[11px] font-semibold", color)}>{label}</div>
       {children}
     </div>
   )

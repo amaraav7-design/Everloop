@@ -256,6 +256,8 @@ export function Step2SelectAudience({
           return (
             <button
               key={option.type}
+              type="button"
+              aria-pressed={isSelected}
               onClick={() =>
                 onUpdate({
                   ...audience,
@@ -271,7 +273,7 @@ export function Step2SelectAudience({
                     option.type === 'csv' ? audience.csvContacts : undefined,
                 })
               }
-              className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
+              className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
                 isSelected
                   ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                   : 'border-border bg-card/50 hover:border-border'
@@ -314,7 +316,7 @@ export function Step2SelectAudience({
                   <button
                     key={tag.id}
                     onClick={() => toggleTag(tag.id)}
-                    className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                    className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       isSelected
                         ? 'border-primary/30 bg-primary/10 text-primary'
                         : 'border-border bg-muted text-muted-foreground hover:border-border'
@@ -444,7 +446,7 @@ export function Step2SelectAudience({
                 <button
                   key={tag.id}
                   onClick={() => toggleExcludeTag(tag.id)}
-                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     isExcluded
                       ? 'border-red-500/30 bg-red-500/10 text-red-300'
                       : 'border-border bg-muted text-muted-foreground hover:border-border'

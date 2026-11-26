@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CornerUpLeft, Copy, SmilePlus } from "lucide-react";
+import { CornerUpLeft, Copy, Ellipsis, SmilePlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -86,7 +86,7 @@ export function MessageActions({
         isAgent ? "justify-end" : "justify-start",
       )}
       onContextMenu={handleContextMenu}
-      onBlur={() => setTouchOpen(false)}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setTouchOpen(false); }}
     >
       {/* `min-w-0` lets this flex child actually respect the 75% cap.
        *  Default `min-width: auto` lets content (a long quote preview,
@@ -95,18 +95,27 @@ export function MessageActions({
        *  area. See issue #165. */}
       <div className="group/actions relative min-w-0 max-w-[75%]">
         {children}
+        <button
+          type="button"
+          aria-label={t("messageActions")}
+          aria-expanded={touchOpen || pickerOpen}
+          onClick={() => setTouchOpen((value) => !value)}
+          className={cn("absolute top-0 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-muted sm:hidden", isAgent ? "-start-11" : "-end-11")}
+        >
+          <Ellipsis className="size-4" aria-hidden="true" />
+        </button>
       <div
         data-touch-open={touchOpen || pickerOpen ? "true" : undefined}
         className={cn(
-          "absolute -top-3 z-10 flex h-7 items-center gap-0.5 rounded-full border border-border bg-popover/95 px-1 shadow-md backdrop-blur-sm transition-opacity",
+          "absolute bottom-full z-10 hidden items-center gap-0.5 rounded-xl border bg-popover px-1 shadow-md transition-opacity sm:flex",
           "opacity-0 group-hover/actions:opacity-100 group-focus-within/actions:opacity-100",
-          "data-[touch-open=true]:opacity-100",
+          "data-[touch-open=true]:flex data-[touch-open=true]:opacity-100",
           isAgent ? "right-3" : "left-3",
         )}
       >
         <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
           <PopoverTrigger
-            className="flex h-5 w-5 items-center justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
+            className="flex size-11 items-center sm:size-7 justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
             aria-label={t("react")}
           >
             <SmilePlus className="h-3.5 w-3.5" />
@@ -120,7 +129,7 @@ export function MessageActions({
                 key={e}
                 type="button"
                 onClick={() => handlePickEmoji(e)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none transition-transform hover:scale-125 hover:bg-muted"
+                className="flex size-11 items-center justify-center rounded-full text-lg leading-none transition-colors hover:bg-muted sm:size-8"
                 aria-label={t("reactWith", { emoji: e })}
               >
                 {e}
@@ -131,7 +140,7 @@ export function MessageActions({
         <button
           type="button"
           onClick={handleReply}
-          className="flex h-5 w-5 items-center justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
+          className="flex size-11 items-center sm:size-7 justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
           aria-label={t("reply")}
         >
           <CornerUpLeft className="h-3.5 w-3.5" />
@@ -139,7 +148,7 @@ export function MessageActions({
         <button
           type="button"
           onClick={handleCopy}
-          className="flex h-5 w-5 items-center justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
+          className="flex size-11 items-center sm:size-7 justify-center rounded-full text-popover-foreground hover:bg-muted hover:text-foreground"
           aria-label={t("copyText")}
         >
           <Copy className="h-3.5 w-3.5" />

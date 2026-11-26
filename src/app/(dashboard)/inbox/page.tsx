@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -17,6 +18,8 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { useCan } from "@/hooks/use-can";
 import {
   applyMessageUpdate,
   applyRealtimeInsert,
@@ -43,16 +46,18 @@ function contactPanelSnapshot() {
 // boundary or the production build bails to CSR and errors out. Thin
 // wrapper supplies it; the inner component holds all the inbox state.
 export default function InboxPage() {
+  const { accountId } = useAuth();
   return (
     <Suspense fallback={null}>
-      <InboxPageInner />
+      <InboxPageInner key={accountId ?? "inbox"} />
     </Suspense>
   );
 }
 
 function InboxPageInner() {
   const t = useTranslations("Inbox.page");
-  const router = useRouter();
+  const canEditSettings = useCan("edit-settings");
+  const tSidebar = useTranslations("Sidebar");
   const searchParams = useSearchParams();
   /**
    * `?c=<id>` deep-link support. Used when landing here from the
@@ -61,6 +66,9 @@ function InboxPageInner() {
    */
   const deepLinkConvId = searchParams.get("c");
   const [mobileContactId, setMobileContactId] = useState<string | null>(null);
+  const activeThread = useRef<string | null>(null);
+  const [textDrafts] = useState(() => new Map<string, string>());
+  const [unavailableLink, setUnavailableLink] = useState<string | null>(null);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -423,17 +431,22 @@ function InboxPageInner() {
   );
 
   useEffect(() => {
-    if (!deepLinkConvId || autoSelectedForDeepLinkRef.current === deepLinkConvId ||
-      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(deepLinkConvId)) return;
+    if (!deepLinkConvId || autoSelectedForDeepLinkRef.current === deepLinkConvId) return;
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(deepLinkConvId)) return;
     const controller = new AbortController();
     async function loadLinkedConversation() {
       const db = createClient();
       const { data, error } = await db.from("conversations").select(CONVERSATION_SELECT)
         .eq("id", deepLinkConvId).abortSignal(controller.signal).maybeSingle();
       if (controller.signal.aborted) return;
-      if (error || !data) return;
+      if (error || !data) {
+        setUnavailableLink(deepLinkConvId);
+        return;
+      }
+      setUnavailableLink(null);
       const linked = normalizeConversation(data);
       autoSelectedForDeepLinkRef.current = linked.id;
+      activeThread.current = linked.id;
       setActiveConversation(linked);
       setActiveContact(linked.contact ?? null);
       setMessages([]);
@@ -449,6 +462,7 @@ function InboxPageInner() {
       // when conversationId changes — so messages would stay empty until
       // the user navigated away and back. Bail out early instead.
       if (activeConversation?.id === conv.id) return;
+      activeThread.current = conv.id;
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
@@ -479,41 +493,68 @@ function InboxPageInner() {
       // Reflect the selection in the URL so a refresh lands the user
       // back in the same thread, and so copy-paste links work. Use
       // replace() to avoid polluting browser history with every click.
-      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      const params = new URLSearchParams(window.location.search);
+      params.set("c", conv.id);
+      const href = `/inbox?${params}`;
+      if (!activeConversation?.id && window.matchMedia("(width < 64rem)").matches) {
+        window.history.pushState({ everloopInboxList: true }, "", href);
+      } else {
+        window.history.replaceState({ everloopInboxList: window.history.state?.everloopInboxList }, "", href);
+      }
     },
-    [activeConversation?.id, router]
+    [activeConversation?.id]
   );
 
-  // Mobile "back" — deselect the conversation so the list pane comes
-  // back. Also clears the ?c= param so a refresh lands on the list
-  // instead of re-opening the thread the user just backed out of.
-  const handleCloseConversation = useCallback(() => {
+  const clearConversation = useCallback(() => {
+    const previous = activeThread.current;
+    activeThread.current = null;
+    autoSelectedForDeepLinkRef.current = null;
     setActiveConversation(null);
     setActiveContact(null);
+    setMobileContactId(null);
     setMessages([]);
-    // Clearing the ref lets the deep-link auto-selector fire again if
-    // the user later visits /inbox?c=<same-id> — desirable UX.
-    autoSelectedForDeepLinkRef.current = null;
-    router.replace("/inbox", { scroll: false });
-  }, [router]);
+    if (previous) {
+      requestAnimationFrame(() => {
+        const row = document.getElementById(`conversation-${previous}`);
+        row?.focus({ preventScroll: true });
+      });
+    }
+  }, []);
 
+  useEffect(() => {
+    function onHistory() {
+      if (!new URLSearchParams(window.location.search).has("c")) {
+        clearConversation();
+      }
+    }
+    window.addEventListener("popstate", onHistory);
+    return () => window.removeEventListener("popstate", onHistory);
+  }, [clearConversation]);
 
-  const handleMessagesLoaded = useCallback(
-    (loaded: Message[], conversationId: string) => {
-      setMessages((prev) => mergeFetchedPage(prev, loaded, conversationId));
-    },
-    [],
-  );
+  const handleCloseConversation = useCallback(() => {
+    clearConversation();
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("c") && window.history.state?.everloopInboxList === true) {
+      window.history.back();
+      return;
+    }
+    params.delete("c");
+    window.history.replaceState(null, "", params.size ? `/inbox?${params}` : "/inbox");
+  }, [clearConversation]);
 
-  const handleOlderMessagesLoaded = useCallback((older: Message[]) => {
+  const handleMessagesLoaded = useCallback((loaded: Message[], conversationId: string) => {
+    if (activeThread.current !== conversationId) return;
+    setMessages((prev) => mergeFetchedPage(prev, loaded, conversationId));
+  }, []);
+
+  const handleOlderMessagesLoaded = useCallback((older: Message[], conversationId: string) => {
+    if (activeThread.current !== conversationId) return;
     setMessages((prev) => prependOlderMessages(prev, older));
   }, []);
 
   const handleNewMessage = useCallback((msg: Message) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
+    if (activeThread.current !== msg.conversation_id) return;
+    setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
   }, []);
 
   const handleUpdateMessage = useCallback(
@@ -528,11 +569,9 @@ function InboxPageInner() {
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? { ...c, status } : c))
       );
-      if (activeConversation?.id === conversationId) {
-        setActiveConversation((prev) => (prev ? { ...prev, status } : prev));
-      }
+      setActiveConversation((prev) => prev?.id === conversationId ? { ...prev, status } : prev);
     },
-    [activeConversation]
+    []
   );
 
   const handleAssignChange = useCallback(
@@ -561,21 +600,30 @@ function InboxPageInner() {
   // it back to the list. On lg+ both panes render side-by-side as
   // before, unchanged.
   const hasActiveConv = !!activeConversation;
+  const deepLinkUnavailable = deepLinkConvId && (unavailableLink === deepLinkConvId ||
+    !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(deepLinkConvId));
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div data-inbox-thread={hasActiveConv} className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
-        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
-          <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
+        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-status-warning/25 bg-status-warning/10 px-4 py-2">
+          <WifiOff className="h-4 w-4 text-status-warning" />
+          <p className="text-xs text-status-warning">
             {t("whatsappNotConnected")}
+            {canEditSettings && <Link className="ms-2 font-semibold underline underline-offset-2" href="/settings?tab=whatsapp">{tSidebar("settings")}</Link>}
           </p>
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      {deepLinkUnavailable && (
+        <div role="status" className="flex items-center justify-between gap-3 border-b bg-card px-4 py-2 text-sm">
+          <p>{t("conversationUnavailable")}</p>
+          <button type="button" onClick={handleCloseConversation} className="min-h-11 text-primary">{t("dismissUnavailable")}</button>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left panel: Conversation list.
             Hidden on mobile when a conversation is selected so the
             thread can occupy the full width. Always visible on lg+. */}
@@ -612,9 +660,11 @@ function InboxPageInner() {
           )}
         >
           <MessageThread
+            key={activeConversation?.id ?? "inbox-empty"}
             conversation={activeConversation}
             contact={activeContact}
             messages={messages}
+            textDrafts={textDrafts}
             onMessagesLoaded={handleMessagesLoaded}
             onOlderMessagesLoaded={handleOlderMessagesLoaded}
             onNewMessage={handleNewMessage}
@@ -634,15 +684,15 @@ function InboxPageInner() {
             agent hasn't collapsed it via the thread-header toggle (#258).
             On mobile it's always hidden (the `lg:block` below), so the
             toggle — which is itself desktop-only — never affects it. */}
-        {contactPanelOpen && (
-          <div className="hidden lg:block">
-            <ContactSidebar contact={activeContact} />
+        {contactPanelOpen && activeContact && (
+          <div className="hidden min-[1440px]:block">
+            <ContactSidebar key={activeContact.id} contact={activeContact} />
           </div>
         )}
         <Sheet open={Boolean(activeContact && mobileContactId === activeContact.id)} onOpenChange={open => { if (!open) setMobileContactId(null); }}>
-          <SheetContent side="bottom" className="h-[80dvh] gap-0 pb-[env(safe-area-inset-bottom)] lg:hidden">
+          <SheetContent side="bottom" className="max-h-[80dvh] min-h-[55dvh] gap-0 overflow-hidden rounded-t-2xl pb-[env(safe-area-inset-bottom)] min-[1440px]:hidden">
             <SheetHeader><SheetTitle>{t("mobileContactDetails")}</SheetTitle></SheetHeader>
-            <div className="min-h-0 flex-1"><ContactSidebar contact={activeContact} fullWidth /></div>
+            <div className="min-h-0 flex-1"><ContactSidebar key={activeContact?.id} contact={activeContact} fullWidth /></div>
           </SheetContent>
         </Sheet>
       </div>

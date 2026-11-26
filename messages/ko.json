@@ -1,4 +1,18 @@
 {
+  "EditorLeave": {
+    "saveFailed": "변경사항을 저장할 수 없습니다. 계속 편집하거나 다시 시도할 수 있습니다.",
+    "title": "변경사항을 저장하지 않고 나갈까요?",
+    "description": "나가기 전에 변경사항을 저장하거나 취소하고 계속하세요.",
+    "stay": "계속 편집",
+    "discard": "변경사항 취소",
+    "save": "저장하고 나가기",
+    "saving": "저장 중…"
+  },
+  "AuthFrame": {
+    "description": "WhatsApp 대화를 위한 팀 작업 공간입니다.",
+    "showPassword": "비밀번호 표시",
+    "hidePassword": "비밀번호 숨기기"
+  },
   "LoginPage": {
     "titleAccept": "로그인하여 수락하기",
     "titleWelcome": "다시 오신 것을 환영합니다",
@@ -72,6 +86,8 @@
   },
   "Dashboard": {
     "activityFeed": {
+      "loadFailed": "활동을 불러올 수 없습니다.",
+      "retry": "다시 시도",
       "title": "최근 활동",
       "viewAll": "전체 보기 →",
       "noActivity": "아직 활동이 없습니다",
@@ -330,6 +346,8 @@
   },
   "Inbox": {
     "page": {
+      "conversationUnavailable": "이 대화를 열 수 없습니다.",
+      "dismissUnavailable": "받은편지함으로 돌아가기",
       "mobileContactDetails": "연락처 상세 정보",
       "whatsappNotConnected": "WhatsApp®이 연결되어 있지 않습니다. 설정으로 이동해 계정을 연결하세요."
     },
@@ -355,6 +373,9 @@
       "retryPage": "다시 시도"
     },
     "messageThread": {
+      "historyLoadFailed": "메시지를 불러올 수 없습니다.",
+      "threadActions": "대화 작업",
+      "jumpToLatest": "최신 메시지로 이동",
       "backToConversations": "대화 목록으로 돌아가기",
       "hideContactPanel": "연락처 패널 숨기기",
       "showContactPanel": "연락처 패널 표시",
@@ -398,6 +419,7 @@
       "noCustomerMessages": "고객 메시지 없음"
     },
     "composer": {
+      "composeLabel": "답장 입력",
       "draftHint": "✨를 눌러 AI로 답장 초안을 작성하세요 — 보내기 전에 수정할 수 있습니다",
       "sessionExpiredHint": "고객 메시지 수신 후 24시간 동안 자유롭게 답장할 수 있습니다. 먼저 연락하려면 승인된 템플릿을 사용하세요.",
       "templates": "템플릿",
@@ -476,6 +498,7 @@
       "you": "나"
     },
     "actions": {
+      "messageActions": "메시지 작업",
       "reply": "답장",
       "copyText": "텍스트 복사",
       "delete": "삭제",
@@ -564,6 +587,7 @@
       }
     },
     "page": {
+      "actionsFor": "{name} 작업",
       "title": "연락처",
       "subtitle": "연락처 목록을 관리하세요. 전체 연락처 {count}개.",
       "subtitleZero": "연락처 목록을 관리하세요.",
@@ -647,6 +671,8 @@
       "notLinkedToAccount": "프로필이 계정에 연결되어 있지 않습니다."
     },
     "detailView": {
+      "loadFailed": "연락처를 열 수 없습니다.",
+      "retry": "다시 시도",
       "tabs": {
         "details": "상세 정보",
         "activity": "활동",
@@ -1934,6 +1960,8 @@
       "ownerHint": "계정과 결제에 대한 전체 권한"
     },
     "whatsapp": {
+      "hideAccessToken": "액세스 토큰 숨기기",
+      "showAccessToken": "액세스 토큰 표시",
       "title": "WhatsApp 연결",
       "description": "Meta WhatsApp 비즈니스 API를 연결하세요. 자격 증명, 웹훅, 설정 단계가 모두 여기 있습니다.",
       "tokenCorrupted": "저장된 토큰을 복호화할 수 없습니다",
@@ -2429,6 +2457,7 @@
     "tabSetup": "설정",
     "tabUsage": "사용량",
     "playground": {
+      "sendMessage": "메시지 보내기",
       "title": "플레이그라운드",
       "subtitle": "— 고객 입장에서 답변을 테스트하세요",
       "reset": "초기화",
@@ -2491,6 +2520,7 @@
     "defaultListButton": "메뉴"
   },
   "DashboardShell": {
+    "skipToContent": "본문으로 건너뛰기",
     "loading": "불러오는 중..."
   },
   "UiPrimitives": {
@@ -3051,6 +3081,7 @@
     }
   },
   "Mobile": {
+    "installed": "이 기기에 설치됨",
     "home": "홈",
     "inbox": "받은편지함",
     "contacts": "연락처",

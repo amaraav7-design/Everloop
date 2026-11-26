@@ -1,6 +1,5 @@
 "use client";
 
-import { EverloopMark } from "@/components/layout/everloop-mark";
 import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -13,7 +12,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { CheckCircle, ArrowLeft } from "lucide-react";
 
@@ -51,15 +49,15 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border bg-card">
-          <CardHeader className="justify-items-center text-center">
+      <div className="flex w-full items-center justify-center">
+        <Card className="w-full max-w-md border-border bg-card sm:px-2">
+          <CardHeader className="text-left">
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
               <CheckCircle className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle className="text-xl text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {t("checkEmailTitle")}
-            </CardTitle>
+            </h1>
             <CardDescription className="text-muted-foreground">
               {t.rich("checkEmailDesc", {
                 email,
@@ -70,14 +68,12 @@ export default function ForgotPasswordPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/login">
-              <Button
+            <Button render={<Link href="/login" />} nativeButton={false}
                 variant="outline"
                 className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {t("backToSignIn")}
               </Button>
-            </Link>
           </CardContent>
         </Card>
       </div>
@@ -85,13 +81,12 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="justify-items-center text-center">
+    <div className="flex w-full items-center justify-center">
+      <Card className="w-full max-w-md border-border bg-card sm:px-2">
+        <CardHeader className="text-left">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <EverloopMark className="size-12" />
           </div>
-          <CardTitle className="text-xl text-foreground">{t("title")}</CardTitle>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("title")}</h1>
           <CardDescription className="text-muted-foreground">
             {t("desc")}
           </CardDescription>
@@ -99,7 +94,7 @@ export default function ForgotPasswordPage() {
         <CardContent>
           <form onSubmit={handleReset} className="flex flex-col gap-4">
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div role="alert" className="rounded-lg border border-status-critical/25 bg-status-critical/10 px-4 py-3 text-sm text-status-critical">
                 {error}
               </div>
             )}
@@ -110,6 +105,7 @@ export default function ForgotPasswordPage() {
               </Label>
               <Input
                 id="email"
+                autoComplete="email"
                 type="email"
                 placeholder={t("emailPlaceholder")}
                 value={email}
@@ -122,7 +118,7 @@ export default function ForgotPasswordPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-2 min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? t("sending") : t("sendLink")}
             </Button>

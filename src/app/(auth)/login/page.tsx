@@ -1,6 +1,5 @@
 "use client";
 
-import { EverloopMark } from "@/components/layout/everloop-mark";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -8,13 +7,13 @@ import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/auth/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { UsersRound } from "lucide-react";
 
@@ -89,19 +88,17 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="justify-items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
-            ) : (
-              <EverloopMark className="size-12" />
-            )}
-          </div>
-          <CardTitle className="text-xl text-foreground">
+    <div className="flex w-full items-center justify-center">
+      <Card className="w-full max-w-md border-border bg-card sm:px-2">
+        <CardHeader className="text-left">
+          {inviteToken && (
+            <div className="mb-1 flex size-11 items-center justify-center rounded-xl bg-primary-soft">
+              <UsersRound className="size-5 text-primary" aria-hidden="true" />
+            </div>
+          )}
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             {inviteToken ? t('titleAccept') : t('titleWelcome')}
-          </CardTitle>
+          </h1>
           <CardDescription className="text-muted-foreground">
             {inviteToken
               ? t('descAccept')
@@ -116,7 +113,7 @@ function LoginPageInner() {
               </div>
             )}
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div role="alert" className="rounded-lg border border-status-critical/25 bg-status-critical/10 px-4 py-3 text-sm text-status-critical">
                 {error}
               </div>
             )}
@@ -127,6 +124,7 @@ function LoginPageInner() {
               </Label>
               <Input
                 id="email"
+                autoComplete="username"
                 type="email"
                 placeholder={t('emailPlaceholder')}
                 value={email}
@@ -148,9 +146,9 @@ function LoginPageInner() {
                   {t('forgotPassword')}
                 </Link>
               </div>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
+                autoComplete="current-password"
                 placeholder={t('passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -162,7 +160,7 @@ function LoginPageInner() {
             <Button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-2 min-h-11 w-full bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? t('signingIn') : t('signIn')}
             </Button>

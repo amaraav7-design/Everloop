@@ -278,7 +278,7 @@ export function Step3Personalize({
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-primary" />
             <p className="text-sm font-medium text-foreground">{t('personalize.headerImage')}</p>
-            <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium uppercase text-primary">
+            <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               {mediaHeaderType}
             </span>
           </div>
@@ -315,13 +315,7 @@ export function Step3Personalize({
         </div>
       )}
 
-      {placeholders.length === 0 && !mediaHeaderType ? (
-        <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            {t('personalize.noPreview')}
-          </p>
-        </div>
-      ) : placeholders.length === 0 ? null : (
+      {placeholders.length > 0 && (
         <div className="space-y-4">
           {placeholders.map((placeholder) => {
             const key = placeholder.replace(/^\{\{|\}\}$/g, '');
@@ -442,9 +436,9 @@ export function Step3Personalize({
             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
           )}
         </div>
-        <div className="rounded-lg bg-[#0e1a12] p-3">
-          <div className="ml-auto max-w-[85%] rounded-lg bg-primary/30 px-3 py-2 shadow-sm">
-            <p className="whitespace-pre-wrap text-sm text-primary">
+        <div className="rounded-lg bg-muted p-3">
+          <div className="ml-auto max-w-[85%] rounded-xl rounded-ee-sm bg-primary-soft-2 px-3 py-2">
+            <p className="whitespace-pre-wrap break-words text-sm text-foreground">
               {previewText}
             </p>
           </div>

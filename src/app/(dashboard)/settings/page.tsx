@@ -3,6 +3,9 @@
 import { Suspense, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
@@ -91,14 +94,25 @@ function SettingsPageInner() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {t('pageTitle')}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className={cn("mt-1 text-sm text-muted-foreground", section !== 'overview' && "hidden lg:block")}>
           {t('pageDesc')}
         </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
-        <div className="min-w-0">{panel[section]}</div>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+        <SettingsRail active={section} onSelect={go} hints={hints} className={cn(
+          "lg:sticky lg:top-0 lg:max-h-full lg:self-start",
+          section !== 'overview' && "hidden lg:flex"
+        )} />
+        <div className="min-w-0 space-y-4">
+          {section !== 'overview' && (
+            <Button className="lg:hidden" variant="ghost" onClick={() => go('overview')}>
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              {t('sections.overview')}
+            </Button>
+          )}
+          {panel[section]}
+        </div>
       </div>
     </div>
   );

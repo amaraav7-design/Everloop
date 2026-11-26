@@ -27,16 +27,19 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Ellipsis,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { replyWindowExpiresAt } from "@/lib/whatsapp/reply-window";
 import { useTranslations } from "next-intl";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MessageBubble } from "./message-bubble";
@@ -85,8 +88,9 @@ interface MessageThreadProps {
   conversation: Conversation | null;
   contact: Contact | null;
   messages: Message[];
+  textDrafts: Map<string, string>;
   onMessagesLoaded: (messages: Message[], conversationId: string) => void;
-  onOlderMessagesLoaded?: (messages: Message[]) => void;
+  onOlderMessagesLoaded?: (messages: Message[], conversationId: string) => void;
   onNewMessage: (message: Message) => void;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
@@ -155,26 +159,15 @@ function groupMessagesByDate(messages: Message[]) {
 
 const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
   { label: "Open", value: "open", color: "text-primary" },
-  { label: "Pending", value: "pending", color: "text-amber-400" },
+  { label: "Pending", value: "pending", color: "text-status-warning" },
   { label: "Closed", value: "closed", color: "text-muted-foreground" },
 ];
-
-/**
- * WhatsApp-style doodle background applied to the chat area (both the
- * active thread and the empty state). The SVG tile lives at
- * `/public/inbox-doodle.svg`; the slate-950 colour sits underneath so
- * the doodles read as a subtle pattern rather than a stark grid.
- *
- * Defined once at module scope so the two render paths can't drift —
- * if we ever switch the asset, both spots update together.
- */
-const DOODLE_BG_CLASSES =
-  "bg-background bg-[url('/inbox-doodle.svg')] bg-repeat";
 
 export function MessageThread({
   conversation,
   contact,
   messages,
+  textDrafts,
   onMessagesLoaded,
   onOlderMessagesLoaded,
   onNewMessage,
@@ -196,6 +189,7 @@ export function MessageThread({
   const { user } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const [olderPages, setOlderPages] = useState<{
@@ -365,9 +359,8 @@ export function MessageThread({
 
       if (cancelled) return;
 
-      if (error) {
-        console.error("Failed to fetch messages:", error);
-      } else {
+      setLoadFailed(Boolean(error));
+      if (!error) {
         const newestPage = ((data ?? []) as Message[]).slice().reverse();
         setOlderPages({
           conversationId,
@@ -419,7 +412,7 @@ export function MessageThread({
           scrollTop: el.scrollTop,
         };
       }
-      onOlderMessagesLoaded?.(olderPage);
+      onOlderMessagesLoaded?.(olderPage, conversationId);
     } finally {
       setLoadingOlder(false);
     }
@@ -546,7 +539,24 @@ export function MessageThread({
       });
   }, [conversationId, hasUnread]);
 
-  // Auto-scroll to bottom on new messages
+  const followMessages = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
+
+  function trackScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    followMessages.current = el.scrollHeight - el.clientHeight - el.scrollTop < 96;
+    if (followMessages.current) setShowLatest(false);
+  }
+
+  function jumpToLatest() {
+    const el = scrollRef.current;
+    if (!el) return;
+    followMessages.current = true;
+    el.scrollTop = el.scrollHeight;
+    setShowLatest(false);
+  }
+
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -556,8 +566,18 @@ export function MessageThread({
       el.scrollTop = el.scrollHeight - anchor.scrollHeight + anchor.scrollTop;
       return;
     }
-    el.scrollTop = el.scrollHeight;
+    if (followMessages.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const lastMessageId = messages.at(-1)?.id;
+  const previousLastMessage = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const previous = previousLastMessage.current;
+    previousLastMessage.current = lastMessageId;
+    if (!previous || !lastMessageId || previous === lastMessageId || followMessages.current) return;
+    const frame = requestAnimationFrame(() => setShowLatest(true));
+    return () => cancelAnimationFrame(frame);
+  }, [lastMessageId]);
 
   const handleSend = useCallback(
     async (text: string, replyToId?: string) => {
@@ -959,7 +979,7 @@ export function MessageThread({
   // pattern under the user's eye.
   if (!conversation || !contact) {
     return (
-      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
+      <div className={cn("flex flex-1 flex-col items-center justify-center", "bg-background")}>
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <MessageSquare className="h-8 w-8 text-muted-foreground" />
         </div>
@@ -983,6 +1003,57 @@ export function MessageThread({
     ? (currentAssignee?.full_name ?? t("assigned"))
     : t("assign");
 
+  const statusOptions = STATUS_OPTIONS.map((option) => (
+    <DropdownMenuItem
+      key={option.value}
+      onClick={() => handleStatusChange(option.value)}
+      className={option.color}
+    >
+      {t(`status${option.label}`)}
+    </DropdownMenuItem>
+  ));
+  const assignmentOptions = (
+    <>
+      {profiles.length === 0 ? (
+        <DropdownMenuItem disabled>{t("noTeammates")}</DropdownMenuItem>
+      ) : (
+        profiles.map((profile) => {
+          const presence = getPresence(profile.user_id);
+          const isSelected = profile.user_id === assignedAgentId;
+          return (
+            <DropdownMenuItem
+              key={profile.id}
+              onClick={() => handleAssignChange(profile.user_id)}
+              className={isSelected ? "text-primary" : undefined}
+            >
+              <PresenceDot
+                status={presence}
+                label={presenceLabel(
+                  presence,
+                  getRow(profile.user_id)?.last_seen_at ?? null,
+                  now,
+                )}
+              />
+              <span className="min-w-0 flex-1">
+                {profile.full_name}
+                {profile.user_id === user?.id ? t("me") : ""}
+              </span>
+              {isSelected && <Check className="size-3" aria-hidden="true" />}
+            </DropdownMenuItem>
+          );
+        })
+      )}
+      {assignedAgentId && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleAssignChange(null)}>
+            {t("unassign")}
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  );
+
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
     // thread's flex *wrapper* (issue #165), but this root keeps the
@@ -992,11 +1063,9 @@ export function MessageThread({
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
-    <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
-      {/* Header — solid card surface sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <div className="flex min-w-0 flex-1 flex-col bg-background">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 border-b bg-card px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
           {onBack && (
@@ -1009,32 +1078,23 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          <div className="hidden size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary sm:flex">
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">{contactHandle(contact)}</p>
-            <p className="truncate text-xs text-muted-foreground sm:hidden">{sessionLabel}</p>
+            <h1 className="line-clamp-2 break-words text-base font-semibold text-foreground sm:line-clamp-1">{displayName}</h1>
+            <p className={cn("flex items-center gap-1 text-xs", sessionExpired ? "text-status-warning" : "text-muted-foreground")}>
+              <Clock className="size-3 shrink-0" aria-hidden="true" />
+              <span>{sessionLabel}</span>
+              <span className="hidden truncate min-[1440px]:inline"> / {contactHandle(contact)}</span>
+            </p>
           </div>
-          {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. */}
-          <Badge
-            variant="outline"
-            className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
-              sessionExpired ? "text-muted-foreground" : "text-primary"
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            {sessionLabel}
-          </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="order-2 flex shrink-0 items-center gap-1 sm:gap-2">
           {onShowMobileContact && (
             <button type="button" onClick={onShowMobileContact} aria-label={t("showContactPanel")}
-              className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted lg:hidden">
+              className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted min-[1440px]:hidden">
               <PanelRightOpen className="size-5" aria-hidden="true" />
             </button>
           )}
@@ -1053,7 +1113,7 @@ export function MessageThread({
               title={contactPanelOpen ? t("hideContact") : t("showContact")}
               aria-pressed={contactPanelOpen}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground min-[1440px]:inline-flex",
                 contactPanelOpen ? "text-primary" : "text-muted-foreground",
               )}
             >
@@ -1078,7 +1138,7 @@ export function MessageThread({
               aria-label={t("refreshConversation")}
               title={t("refresh")}
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                "hidden size-9 items-center justify-center rounded-md text-muted-foreground sm:inline-flex transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
               )}
             >
               <RefreshCw
@@ -1087,10 +1147,33 @@ export function MessageThread({
             </button>
           )}
 
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={t("threadActions")}
+              className="inline-flex size-11 items-center justify-center rounded-lg bg-muted/55 text-foreground transition-colors hover:bg-muted sm:hidden"
+            >
+              <Ellipsis className="size-5" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <span className="flex-1">{t("status")}</span>
+                  {currentStatus && <span className="text-muted-foreground">{t(`status${currentStatus.label}`)}</span>}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>{statusOptions}</DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>{assignLabel}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>{assignmentOptions}</DropdownMenuSubContent>
+              </DropdownMenuSub>
+              {onRefresh && <DropdownMenuItem onClick={handleRefreshClick} disabled={isRefreshing}>{t("refreshConversation")}</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  "hidden min-h-9 items-center justify-center gap-1 rounded-lg bg-muted/55 px-2.5 text-xs hover:bg-muted pointer-coarse:min-h-11 sm:inline-flex",
                   currentStatus?.color ?? "text-muted-foreground"
                 )}>
                 {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
@@ -1100,15 +1183,7 @@ export function MessageThread({
               align="end"
               className="border-border bg-popover"
             >
-              {STATUS_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
-                >
-                  {t(`status${opt.label}`)}
-                </DropdownMenuItem>
-              ))}
+              {statusOptions}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -1116,7 +1191,7 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                "hidden min-h-9 items-center justify-center gap-1 rounded-lg bg-muted/55 px-2.5 text-xs hover:bg-muted pointer-coarse:min-h-11 sm:inline-flex",
                 assignedAgentId ? "text-primary" : "text-muted-foreground"
               )}
             >
@@ -1128,64 +1203,25 @@ export function MessageThread({
               align="end"
               className="border-border bg-popover"
             >
-              {profiles.length === 0 ? (
-                <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-                  {t("noTeammates")}
-                </DropdownMenuItem>
-              ) : (
-                profiles.map((p) => {
-                  const isSelected = p.user_id === assignedAgentId;
-                  const presence = getPresence(p.user_id);
-                  return (
-                    <DropdownMenuItem
-                      key={p.id}
-                      onClick={() => handleAssignChange(p.user_id)}
-                      className={cn(
-                        "text-sm",
-                        isSelected ? "text-primary" : "text-popover-foreground"
-                      )}
-                    >
-                      <PresenceDot
-                        status={presence}
-                        label={presenceLabel(
-                          presence,
-                          getRow(p.user_id)?.last_seen_at ?? null,
-                          now
-                        )}
-                        className="mr-2"
-                      />
-                      <span className="flex-1">
-                        {p.full_name}
-                        {p.user_id === user?.id ? t("me") : ""}
-                      </span>
-                      {isSelected && <Check className="ml-2 h-3 w-3" />}
-                    </DropdownMenuItem>
-                  );
-                })
-              )}
-              {assignedAgentId && (
-                <>
-                  <DropdownMenuSeparator className="bg-border" />
-                  <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
-                    className="text-sm text-muted-foreground"
-                  >
-                    {t("unassign")}
-                  </DropdownMenuItem>
-                </>
-              )}
+              {assignmentOptions}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
-        {loading ? (
+      <div ref={scrollRef} onScroll={trackScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 lg:px-6">
+        {loadFailed && !loading && (
+          <div role="status" className="mx-auto mb-4 flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-lg border border-status-critical/25 bg-status-critical/10 px-4 py-3 text-sm">
+            <p className="text-status-critical">{t("historyLoadFailed")}</p>
+            {onRefresh && <Button variant="outline" onClick={handleRefreshClick}>{t("refresh")}</Button>}
+          </div>
+        )}
+        {loading && messages.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 ? !loadFailed && (
           <div className="flex flex-col items-center justify-center py-12">
             <p className="text-sm text-muted-foreground">{t("noMessagesYet")}</p>
             <p className="text-xs text-muted-foreground">
@@ -1284,8 +1320,14 @@ export function MessageThread({
       />
 
       {/* Composer */}
+      {showLatest && (
+        <div className="flex justify-center border-t bg-card px-3 py-1">
+          <Button variant="ghost" onClick={jumpToLatest} className="min-h-9 text-primary">{t("jumpToLatest")}</Button>
+        </div>
+      )}
       <MessageComposer
         conversationId={conversation.id}
+        textDrafts={textDrafts}
         sessionExpired={sessionExpired}
         onSend={handleSend}
         onSendMedia={handleSendMedia}

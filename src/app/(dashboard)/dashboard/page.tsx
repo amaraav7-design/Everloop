@@ -53,6 +53,7 @@ function DashboardPageInner() {
   const [failed, setFailed] = useState(false)
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+  const [activityFailed, setActivityFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const requestRef = useRef(0)
   const debounceRef = useRef<number | null>(null)
@@ -77,12 +78,16 @@ function DashboardPageInner() {
     refresh(range)
   }, [range, refresh])
 
-  useEffect(() => {
+  const refreshActivity = useCallback(() => {
     loadActivity(createClient(), 50)
-      .then(setActivity)
-      .catch((err) => console.error('[dashboard] activity failed:', err))
+      .then((items) => { setActivity(items); setActivityFailed(false); })
+      .catch(() => setActivityFailed(true))
       .finally(() => setActivityLoading(false))
   }, [])
+
+  useEffect(() => {
+    refreshActivity()
+  }, [refreshActivity])
 
   useEffect(() => {
     const tick = window.setInterval(() => {
@@ -142,7 +147,7 @@ function DashboardPageInner() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-[100rem] space-y-5">
       <OverviewHeader
         data={data}
         now={now}
@@ -156,12 +161,11 @@ function DashboardPageInner() {
       ) : (
         <>
           <AttentionRow data={data} now={now} onlineCount={onlineCount} />
-          <KpiRow data={data} currency={defaultCurrency} />
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-            <MessageVolumeCard data={data} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
             <ReplyQueueCard data={data} now={now} />
+            <MessageVolumeCard data={data} />
           </div>
+          <KpiRow data={data} currency={defaultCurrency} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             <PipelineCard data={data} currency={defaultCurrency} />
@@ -171,7 +175,11 @@ function DashboardPageInner() {
             </div>
           </div>
 
-          <ActivityFeed items={activity} loading={activityLoading} />
+          <ActivityFeed items={activity} loading={activityLoading} failed={activityFailed} onRetry={() => {
+            setActivityLoading(true)
+            setActivityFailed(false)
+            refreshActivity()
+          }} />
         </>
       )}
     </div>

@@ -587,17 +587,17 @@ export function TemplateManager() {
                         {status.label}
                       </Badge>
                       {template.language && (
-                        <span className="text-xs text-muted-foreground uppercase">
+                        <span className="text-xs text-muted-foreground">
                           {template.language}
                         </span>
                       )}
                       {template.quality_score && (
                         <span
-                          className={`text-[10px] uppercase font-medium ${
+                          className={`text-[10px] font-medium ${
                             template.quality_score === 'GREEN'
-                              ? 'text-emerald-400'
+                              ? 'text-status-good'
                               : template.quality_score === 'YELLOW'
-                                ? 'text-yellow-400'
+                                ? 'text-status-warning'
                                 : 'text-red-400'
                           }`}
                           title={t('qualityScoreTitle')}

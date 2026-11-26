@@ -1,4 +1,18 @@
 {
+  "EditorLeave": {
+    "saveFailed": "No se pudieron guardar los cambios. Puedes seguir editando y volver a intentarlo.",
+    "title": "¿Salir con cambios sin guardar?",
+    "description": "Guarda los cambios antes de salir o descártalos y continúa.",
+    "stay": "Seguir editando",
+    "discard": "Descartar cambios",
+    "save": "Guardar y salir",
+    "saving": "Guardando…"
+  },
+  "AuthFrame": {
+    "description": "Un espacio compartido para las conversaciones de WhatsApp.",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña"
+  },
   "LoginPage": {
     "titleAccept": "Inicia sesión para aceptar",
     "titleWelcome": "Bienvenido de nuevo",
@@ -72,6 +86,8 @@
   },
   "Dashboard": {
     "activityFeed": {
+      "loadFailed": "No se pudo cargar la actividad.",
+      "retry": "Reintentar",
       "title": "Actividad reciente",
       "viewAll": "Ver todo →",
       "noActivity": "Aún no hay actividad",
@@ -330,6 +346,8 @@
   },
   "Inbox": {
     "page": {
+      "conversationUnavailable": "No se pudo abrir esta conversación.",
+      "dismissUnavailable": "Volver a la bandeja",
       "mobileContactDetails": "Datos del contacto",
       "whatsappNotConnected": "WhatsApp® no está conectado. Ve a Configuración para conectar tu cuenta."
     },
@@ -355,6 +373,9 @@
       "retryPage": "Reintentar"
     },
     "messageThread": {
+      "historyLoadFailed": "No se pudieron cargar los mensajes.",
+      "threadActions": "Acciones de la conversación",
+      "jumpToLatest": "Ir al último mensaje",
       "backToConversations": "Volver a las conversaciones",
       "hideContactPanel": "Ocultar panel del contacto",
       "showContactPanel": "Mostrar panel del contacto",
@@ -398,6 +419,7 @@
       "noCustomerMessages": "Sin mensajes del cliente"
     },
     "composer": {
+      "composeLabel": "Escribe una respuesta",
       "draftHint": "Toca ✨ para redactar una respuesta con IA; puedes editarla antes de enviarla",
       "sessionExpiredHint": "Puedes responder libremente durante las 24 horas posteriores a un mensaje del contacto. Usa una plantilla aprobada para iniciar el contacto.",
       "templates": "Plantillas",
@@ -476,6 +498,7 @@
       "you": "Tú"
     },
     "actions": {
+      "messageActions": "Acciones del mensaje",
       "reply": "Responder",
       "copyText": "Copiar texto",
       "delete": "Eliminar",
@@ -564,6 +587,7 @@
       }
     },
     "page": {
+      "actionsFor": "Acciones para {name}",
       "title": "Contactos",
       "subtitle": "Administra tu lista de contactos. {count} contactos en total.",
       "subtitleZero": "Administra tu lista de contactos.",
@@ -647,6 +671,8 @@
       "notLinkedToAccount": "Tu perfil no está vinculado a una cuenta."
     },
     "detailView": {
+      "loadFailed": "No se pudo abrir el contacto.",
+      "retry": "Reintentar",
       "tabs": {
         "details": "Detalles",
         "activity": "Actividad",
@@ -1934,6 +1960,8 @@
       "ownerHint": "Control total de la cuenta y la facturación"
     },
     "whatsapp": {
+      "hideAccessToken": "Ocultar token de acceso",
+      "showAccessToken": "Mostrar token de acceso",
       "title": "Conexión con WhatsApp",
       "description": "Conecta tu API de WhatsApp Business de Meta. Credenciales, webhook y pasos de configuración, todo está aquí.",
       "tokenCorrupted": "No se puede descifrar el token almacenado",
@@ -2429,6 +2457,7 @@
     "tabSetup": "Configuración",
     "tabUsage": "Uso",
     "playground": {
+      "sendMessage": "Enviar mensaje",
       "title": "Playground",
       "subtitle": "— prueba respuestas como si fueras un cliente",
       "reset": "Reiniciar",
@@ -2491,6 +2520,7 @@
     "defaultListButton": "Menú"
   },
   "DashboardShell": {
+    "skipToContent": "Saltar al contenido",
     "loading": "Cargando..."
   },
   "UiPrimitives": {
@@ -3051,6 +3081,7 @@
     }
   },
   "Mobile": {
+    "installed": "Instalada en este dispositivo",
     "home": "Inicio",
     "inbox": "Bandeja",
     "contacts": "Contactos",

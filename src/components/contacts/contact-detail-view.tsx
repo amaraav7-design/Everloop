@@ -119,8 +119,8 @@ export function ContactDetailView({
       .eq('id', contactId)
       .single()
       .then(({ data }) => {
+        setContact(data);
         if (data) {
-          setContact(data);
           setEditName(data.name ?? '');
           setEditPhone(data.phone);
           setEditEmail(data.email ?? '');
@@ -408,10 +408,18 @@ export function ContactDetailView({
         side="right"
         className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
       >
-        {loading || !contact ? (
+        {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="size-6 animate-spin text-primary" />
           </div>
+        ) : !contact ? (
+          <>
+            <SheetHeader><SheetTitle>{t('contactDetailsDesc')}</SheetTitle></SheetHeader>
+            <div className="space-y-3 px-4 pb-6">
+              <p role="alert" className="text-sm text-status-critical">{t('loadFailed')}</p>
+              <Button variant="outline" onClick={() => { setLoading(true); void fetchContact(); }}>{t('retry')}</Button>
+            </div>
+          </>
         ) : (
           <div className="flex flex-col h-full">
             {/* Header */}
@@ -584,7 +592,7 @@ export function ContactDetailView({
                             key={tag.id}
                             onClick={() => toggleTag(tag.id)}
                             disabled={savingTags}
-                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
                               selected
                                 ? 'ring-2 ring-primary ring-offset-1 ring-offset-border'
                                 : 'opacity-50 hover:opacity-80'
@@ -649,7 +657,7 @@ export function ContactDetailView({
                           </p>
                           <button
                             onClick={() => deleteNote(note.id)}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all cursor-pointer shrink-0"
+                            className="text-muted-foreground transition-colors hover:text-status-critical cursor-pointer shrink-0"
                           >
                             <Trash2 className="size-3.5" />
                           </button>

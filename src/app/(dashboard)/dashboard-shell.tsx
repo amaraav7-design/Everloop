@@ -9,6 +9,8 @@ import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { useCaptureInstallPrompt } from "@/components/pwa/install-prompt";
 import { PwaRuntime, useKeyboardViewport } from "@/components/pwa/pwa-runtime";
 import { Sidebar } from "@/components/layout/sidebar";
+import { useTotalUnread } from "@/hooks/use-total-unread";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { Header } from "@/components/layout/header";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
@@ -55,6 +57,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
+  return <WorkspaceShell inbox={inbox} sidebarOpen={sidebarOpen} closeSidebar={closeSidebar} moreButton={moreButton} onMore={() => setSidebarOpen(true)}>{children}</WorkspaceShell>;
+}
+
+function WorkspaceShell({ children, inbox, sidebarOpen, closeSidebar, moreButton, onMore }: {
+  children: React.ReactNode;
+  inbox: boolean;
+  sidebarOpen: boolean;
+  closeSidebar: () => void;
+  moreButton: React.Ref<HTMLButtonElement>;
+  onMore: () => void;
+}) {
+  const totalUnread = useTotalUnread();
+  const unreadNotifications = useUnreadNotifications();
+  const t = useTranslations("DashboardShell");
+
   return (
     <div className="everloop-shell flex overflow-hidden bg-background">
       {/* Reports this tab's online/away presence once we know a user is
@@ -63,18 +80,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop alerts for new customer messages (opt-in via Settings →
           Your profile). Headless — renders nothing. */}
       <BrowserNotificationsListener />
-      <Sidebar open={sidebarOpen} onClose={closeSidebar} />
+      <Sidebar open={sidebarOpen} onClose={closeSidebar} totalUnread={totalUnread} unreadNotifications={unreadNotifications} />
       <div inert={sidebarOpen} className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Header />
+        <a href="#main-content" className="sr-only z-50 rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground focus:not-sr-only focus:absolute focus:start-4 focus:top-3">
+          {t("skipToContent")}
+        </a>
+        <Header unreadNotifications={unreadNotifications} />
         <PwaRuntime />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
-        <main className={cn("relative min-h-0 flex-1", inbox ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain p-4 sm:p-6")}>
+        <main id="main-content" tabIndex={-1} className={cn("relative min-h-0 flex-1", inbox ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain p-4 sm:p-6 xl:px-8")}>
           {/* Above every page: writes are being rejected and here's why.
               Renders nothing unless the account/role failed to resolve. */}
           <AccountAccessAlert />
           {inbox ? <div className="min-h-0 flex-1">{children}</div> : children}
         </main>
-        <MobileNavigation open={sidebarOpen} moreButton={moreButton} onMore={() => setSidebarOpen(true)} />
+        <MobileNavigation open={sidebarOpen} moreButton={moreButton} onMore={onMore} totalUnread={totalUnread} />
       </div>
     </div>
   );

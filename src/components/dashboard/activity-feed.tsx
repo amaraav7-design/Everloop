@@ -15,10 +15,13 @@ import type { ActivityItem, ActivityKind } from '@/lib/dashboard/types'
 import { cn } from '@/lib/utils'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
+import { Button } from '@/components/ui/button'
 
 interface ActivityFeedProps {
   items: ActivityItem[] | null
   loading: boolean
+  failed: boolean
+  onRetry: () => void
 }
 
 const PAGE_SIZES = [5, 10, 20, 50] as const
@@ -34,7 +37,7 @@ const KIND_ICON: Record<ActivityKind, ComponentType<{ className?: string }>> = {
 
 import { useTranslations } from 'next-intl'
 
-export function ActivityFeed({ items, loading }: ActivityFeedProps) {
+export function ActivityFeed({ items, loading, failed, onRetry }: ActivityFeedProps) {
   const t = useTranslations('Dashboard.activityFeed')
   // Start at 5 — a quick scan of the most recent events without
   // dominating vertical real estate. User expands explicitly via the
@@ -62,7 +65,12 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
         </Link>
       </header>
 
-      {loading || !items ? (
+      {failed ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <p role="alert" className="text-sm text-status-critical">{t('loadFailed')}</p>
+          <Button variant="outline" onClick={onRetry}>{t('retry')}</Button>
+        </div>
+      ) : loading || !items ? (
         <div className="space-y-2 p-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />

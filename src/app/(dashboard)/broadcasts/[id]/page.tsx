@@ -90,7 +90,7 @@ function FunnelChart({ steps }: { steps: FunnelStep[] }) {
       <h3 className="mb-4 text-sm font-medium text-foreground">{t('funnel')}</h3>
       <div className="space-y-2">
         {steps.map((step) => {
-          const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
+          const pctOfMax = Math.round((step.value / max) * 100);
           const pctOfSent =
             steps[0].value > 0
               ? Math.round((step.value / steps[0].value) * 100)
@@ -102,7 +102,7 @@ function FunnelChart({ steps }: { steps: FunnelStep[] }) {
               </span>
               <div className="relative h-7 flex-1 rounded-full bg-muted">
                 <div
-                  className={`h-7 rounded-full ${step.color} transition-[width] duration-500`}
+                  className={`h-7 rounded-full ${step.color}`}
                   style={{ width: `${pctOfMax}%` }}
                 />
                 <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-foreground">
@@ -656,7 +656,32 @@ export default function BroadcastDetailPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <ul className="divide-y md:hidden">
+              {recipients.map(recipient => {
+                const status = getRecipientStatus(recipient.status);
+                const latest = recipient.replied_at ?? recipient.read_at ?? recipient.delivered_at ?? recipient.sent_at;
+                return (
+                  <li key={recipient.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-semibold">{recipient.contact?.name ?? t('unknownContact')}</p>
+                        {recipient.contact?.phone && <p className="text-xs text-muted-foreground">{recipient.contact.phone}</p>}
+                      </div>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}>{tStatus(status.label)}</span>
+                    </div>
+                    {latest && <time dateTime={latest} className="mt-1 block text-xs text-muted-foreground">{new Date(latest).toLocaleString()}</time>}
+                    {recipient.error_message && (
+                      <details className="mt-1 text-sm text-status-critical">
+                        <summary className="min-h-11 cursor-pointer content-center">{t('table.error')}</summary>
+                        <p className="break-words">{recipient.error_message}</p>
+                      </details>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
@@ -707,7 +732,7 @@ export default function BroadcastDetailPage() {
                         {recipient.replied_at ? new Date(recipient.replied_at).toLocaleString() : '–'}
                         {recipient.reply_attribution && <span className="block text-xs">{t(`control.${recipient.reply_attribution}`)}</span>}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate text-xs text-red-400">
+                      <TableCell className="max-w-xs whitespace-normal break-words text-xs text-status-critical">
                         {recipient.error_message ?? '-'}
                       </TableCell>
                     </TableRow>
@@ -715,8 +740,10 @@ export default function BroadcastDetailPage() {
                 })}
               </TableBody>
             </Table>
-          </div>
-        )}        {recipientCount > RECIPIENT_PAGE_SIZE && (
+            </div>
+          </>
+        )}
+        {recipientCount > RECIPIENT_PAGE_SIZE && (
           <div className="flex items-center justify-end gap-2 border-t border-border p-3">
             <Button variant="outline" size="sm" disabled={recipientPage === 0} onClick={() => setRecipientPage(page => page - 1)}>{t('control.previous')}</Button>
             <Button variant="outline" size="sm" disabled={(recipientPage + 1) * RECIPIENT_PAGE_SIZE >= recipientCount} onClick={() => setRecipientPage(page => page + 1)}>{t('control.next')}</Button>

@@ -22,7 +22,6 @@
  * /flows/[id]/runs) — those don't belong in the hook.
  */
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   ArrowLeft,
@@ -37,6 +36,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EditorLeaveDialog, useEditorLeave } from "@/components/ui/editor-leave-dialog";
 import { cn } from "@/lib/utils";
 import {
   useFlowEditor,
@@ -44,7 +44,6 @@ import {
 } from "./flow-editor-state";
 
 export function EditorHeader() {
-  const router = useRouter();
   const t = useTranslations("Flows.header");
   const {
     flow,
@@ -58,17 +57,19 @@ export function EditorHeader() {
     setStatus,
     deleteFlow,
   } = useFlowEditor();
+  const exit = useEditorLeave(dirty || saving);
 
   return (
-    <div className="flex flex-col gap-1.5 px-6 pt-5">
+    <div className="flex flex-col gap-2 px-0 sm:px-3 pt-1">
+      <EditorLeaveDialog open={exit.pending} onStay={exit.dismiss} onLeave={exit.leave} onSave={save} saving={saving} />
       <div className="flex flex-wrap items-center gap-3">
         {/* ---- left: back · icon · name · status · edited ---- */}
         <button
           type="button"
-          onClick={() => router.push("/flows")}
+          onClick={() => exit.navigate("/flows")}
           title={t("backToFlows")}
           aria-label={t("backToFlows")}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md pointer-coarse:size-11 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -81,16 +82,16 @@ export function EditorHeader() {
           placeholder={t("namePlaceholder")}
           spellCheck={false}
           aria-label={t("namePlaceholder")}
-          className="min-w-[120px] max-w-[340px] rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-bold leading-tight tracking-tight text-foreground outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-transparent focus:shadow-[0_0_0_3px_var(--primary-soft)]"
+          className="min-w-0 max-w-[340px] grow lg:grow-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-bold leading-tight tracking-tight text-foreground outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-transparent focus:shadow-[0_0_0_3px_var(--primary-soft)]"
         />
         <StatusChip status={state.status} />
         {dirty && (
           <span
-            className="inline-flex shrink-0 items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-300"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-status-warning"
             title={t("unsavedHint")}
             aria-live="polite"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            <span className="h-1.5 w-1.5 rounded-full bg-status-warning" />
             {t("edited")}
           </span>
         )}
@@ -100,7 +101,7 @@ export function EditorHeader() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push(`/flows/${flow.id}/runs`)}
+            onClick={() => exit.navigate(`/flows/${flow.id}/runs`)}
           >
             <History className="h-3.5 w-3.5" />
             {t("runs")}
@@ -112,7 +113,7 @@ export function EditorHeader() {
             variant="ghost"
             size="sm"
             onClick={() => void deleteFlow()}
-            className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {t("delete")}
